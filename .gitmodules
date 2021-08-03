@@ -1,0 +1,3 @@
+[submodule "aoe2techtree"]
+	path = aoe2techtree
+	url = https://github.com/SiegeEngineers/aoe2techtree
