@@ -182,7 +182,7 @@ def parse_replay(replay_file):
     players.append([])
   
   #load data json
-  with open('data.json') as json_file:
+  with open(os.path.join('aoe2techtree', 'data', 'data.json')) as json_file:
     aoe_data = json.load(json_file)
   
   #build civ dict
