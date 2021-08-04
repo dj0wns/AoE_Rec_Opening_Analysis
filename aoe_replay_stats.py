@@ -31,6 +31,7 @@ class OpeningType(Enum):
   StraightArchers=13
   StraightArchers1Range=14
   StraightArchers2Range=15
+  FastCastle=16
 
 # UNIT IDS #
 UNIT_IDS = {
@@ -205,9 +206,12 @@ def parse_replay(replay_file):
           event = None
           if unit_id in ID_UNITS:
             event = Event(EventType.UNIT, ID_UNITS[unit_id], time)
-          else:
+          elif str(unit_id) in aoe_data["data"]["units"]:
             #unit not found in local records
             name = f'{aoe_data["data"]["units"][str(unit_id)]["internal_name"]} ({unit_id})'
+            event = Event(EventType.UNIT, name, time)
+          else:
+            name = f'{unit_id}'
             event = Event(EventType.UNIT, name, time)
           found_item = item_in_list(event, players[player_id])
           if not found_item:
@@ -336,6 +340,10 @@ def guess_strategy(players, header, civs):
     #if only scouts were made
     elif scout_event_indexes:
       strategy = (OpeningType.Scouts)
+    elif castle_event_indexes:
+      strategy = (OpeningType.FastCastle)
+    else:
+      strategy = OpeningType.Unknown
 
     player_strategies.append(strategy)
   return player_strategies
