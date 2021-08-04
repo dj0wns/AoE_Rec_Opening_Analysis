@@ -313,7 +313,7 @@ def guess_strategy(players, header, civs):
     if barracks_event_indexes and mill_event_indexes and militia_event_indexes and militia_event_indexes[0] < feudal_event_indexes[0]:
       if barracks_event_indexes[0] < mill_event_indexes[0]:
         strategy = (OpeningType.PremillDrush)
-      elif mill_event_indexes[0] > barracks_event_indexes[0]:
+      else:
         strategy = (OpeningType.PostmillDrush)
     elif scout_event_indexes and archer_event_indexes and not militia_event_indexes:
       if scout_event_indexes[0] < archer_event_indexes[0]:
