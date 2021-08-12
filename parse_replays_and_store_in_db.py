@@ -23,7 +23,8 @@ def init_db():
   sql_commands.append(""" CREATE TABLE IF NOT EXISTS matches (
                             id integer NOT NULL PRIMARY KEY,
                             average_elo integer NOT NULL,
-                            map_id integer NOT NULL
+                            map_id integer NOT NULL,
+                            time datetime DEFAULT CURRENT_TIMESTAMP
                             ) WITHOUT ROWID; """)
 
   sql_commands.append(""" CREATE TABLE IF NOT EXISTS players (
