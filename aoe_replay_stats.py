@@ -8,10 +8,15 @@ from construct import Byte
 from collections import OrderedDict
 from enum import Enum
 
+
+PARSER_VERSION = 1
+aoe_data = None
+
 class EventType(Enum):
   UNIT=1
   BUILDING=2
   TECH=3
+  RESIGN=4
 
 class OpeningType(Enum):
   Unknown=0
@@ -158,22 +163,58 @@ def output_time(millis):
   return str(minutes).zfill(2) + ":" + str(seconds).zfill(2)
 
 class Event:
-  def __init__(self, event_type, name, timestamp, duration=0):
+  def __init__(self, event_type, id, name, timestamp, duration=0):
     self.event_type = event_type
-    self.name = name
+    self.id = id
+    if name is None:
+      self.update_name()
+    else:
+      self.name = name
     self.timestamp = timestamp
     self.duration = duration
+  
   def __str__(self):
     if self.duration:
       return f'{self.event_type.name}: {self.name} {output_time(self.timestamp)} -> {output_time(self.timestamp+self.duration)}'
     else:
       return f'{self.event_type.name}: {self.name} {output_time(self.timestamp)}'
+  
   def __eq__(self, rhs_):
     if(self.event_type == EventType.BUILDING):
       return False
     if(self.event_type == rhs_.event_type and self.name == rhs_.name):
       return True
     return False
+  
+  def update_name(self):
+    global aoe_data
+    if aoe_data is None:
+      with open(os.path.join('aoe2techtree', 'data', 'data.json')) as json_file:
+        aoe_data = json.load(json_file)
+    if self.event_type == EventType.UNIT:
+      if self.id in ID_UNITS:
+        self.name = ID_UNITS[self.id]
+      elif str(self.id) in aoe_data["data"]["units"]:
+        #unit not found in local records
+        self.name = f'{aoe_data["data"]["units"][str(self.id)]["internal_name"]} ({self.id})'
+      else:
+        self.name = str(self.id)
+    elif self.event_type == EventType.TECH:
+      if self.id in ID_TECHS:
+        self.name = ID_TECHS[self.id]
+      elif str(self.id) in aoe_data["data"]["techs"]:
+        self.name = f'{aoe_data["data"]["techs"][str(self.id)]["internal_name"]} ({self.id})'
+      else:
+        self.name = str(self.id)
+    elif self.event_type == EventType.BUILDING:
+      if self.id in ID_BUILDINGS:
+        self.name = ID_BUILDINGS[self.id]
+      elif str(self.id) in aoe_data["data"]["buildings"]:
+        self.name = f'{aoe_data["data"]["buildings"][str(self.id)]["internal_name"]} ({self.id})'
+      else:
+        self.name = str(self.id)
+    elif self.event_type == EventType.RESIGN:
+      self.name = 'Resignation'
 
 def parse_replay(replay_file):
   #lazily init players
@@ -196,6 +237,7 @@ def parse_replay(replay_file):
   with open(replay_file, 'rb') as data:
     eof = os.fstat(data.fileno()).st_size
     h = header.parse_stream(data)
+    loser_index = None
     fast.meta(data)
     while data.tell() < eof:
       o = fast.operation(data)
@@ -205,17 +247,15 @@ def parse_replay(replay_file):
           unit_id = o[1][1]["unit_id"]
           event = None
           if unit_id in ID_UNITS:
-            event = Event(EventType.UNIT, ID_UNITS[unit_id], time)
+            event = Event(EventType.UNIT, unit_id, ID_UNITS[unit_id], time)
           elif str(unit_id) in aoe_data["data"]["units"]:
             #unit not found in local records
             name = f'{aoe_data["data"]["units"][str(unit_id)]["internal_name"]} ({unit_id})'
-            event = Event(EventType.UNIT, name, time)
+            event = Event(EventType.UNIT, unit_id, name, time)
           else:
             name = f'{unit_id}'
-            event = Event(EventType.UNIT, name, time)
-          found_item = item_in_list(event, players[player_id])
-          if not found_item:
-            players[player_id].append(event)
+            event = Event(EventType.UNIT, unit_id, name, time)
+          players[player_id].append(event)
         
         elif o[1][0] == fast.Action.RESEARCH:
           player_id = o[1][1]["player_id"]
@@ -226,13 +266,13 @@ def parse_replay(replay_file):
             duration = int(aoe_data["data"]["techs"][str(technology_id)]["ResearchTime"]) * 1000
           event = None
           if technology_id in ID_TECHS:
-            event = Event(EventType.TECH, ID_TECHS[technology_id], time, duration)
+            event = Event(EventType.TECH, technology_id, ID_TECHS[technology_id], time, duration)
           elif str(technology_id) in aoe_data["data"]["techs"]:
             name = f'{aoe_data["data"]["techs"][str(technology_id)]["internal_name"]} ({technology_id})'
-            event = Event(EventType.TECH, name, time, duration)
+            event = Event(EventType.TECH, technology_id, name, time, duration)
           else:
             name = f'{technology_id}'
-            event = Event(EventType.TECH, name, time, duration)
+            event = Event(EventType.TECH, technology_id, name, time, duration)
   
           found_item = item_in_list(event, players[player_id])
           if found_item:
@@ -245,22 +285,28 @@ def parse_replay(replay_file):
           building_id = o[1][1]["building_id"]
           string = ""
           if building_id in ID_BUILDINGS:
-            event = Event(EventType.BUILDING, ID_BUILDINGS[building_id], time)
-            players[player_id].append(event)
-          elif building_id not in ID_IGNORE and building_id in aoe_data["data"]["buildings"]:
+            event = Event(EventType.BUILDING, building_id, ID_BUILDINGS[building_id], time)
+          elif building_id in aoe_data["data"]["buildings"]:
             name = f'{aoe_data["data"]["buildings"][str(building_id)]["internal_name"]} ({building_id})'
-            event = Event(EventType.BUILDING, name, time)
-            players[player_id].append(event)
-          elif building_id not in ID_IGNORE:
+            event = Event(EventType.BUILDING, building_id, name, time)
+          else:
             name = f'{building_id}'
-            event = Event(EventType.BUILDING, name, time)
-            players[player_id].append(event)
+            event = Event(EventType.BUILDING, building_id, name, time)
+          players[player_id].append(event)
+        
+        elif o[1][0] == fast.Action.RESIGN:
+          name = 'Resignation'
+          player_id = o[1][1]["player_id"]
+          event = Event(EventType.RESIGN, 0, name, time)
+          players[player_id].append(event)
+          loser_index = player_id
       elif o[0] == fast.Operation.SYNC:
         time += o[1][0]
-  return players, h, civs
+        
+  return players, h, civs, loser_index
 
 
-def guess_strategy(players, header, civs):
+def guess_strategy(players):
   player_strategies = []
   for player in players:
     mill_event_indexes = []
@@ -297,7 +343,7 @@ def guess_strategy(players, header, civs):
         elif event.name == "Scout":
           scout_event_indexes.append(index)
         elif event.name == "Skirmisher":
-          scout_event_indexes.append(index)
+          skirmisher_event_indexes.append(index)
       elif event.event_type == EventType.TECH:
         if event.name == "Feudal Age":
           feudal_event_indexes.append(index)
@@ -310,24 +356,25 @@ def guess_strategy(players, header, civs):
     if not feudal_event_indexes:
       strategy = (OpeningType.Unknown)
       continue
+    print(scout_event_indexes, militia_event_indexes, archer_event_indexes, feudal_event_indexes, stable_event_indexes, archery_range_event_indexes)
     if barracks_event_indexes and mill_event_indexes and militia_event_indexes and militia_event_indexes[0] < feudal_event_indexes[0]:
       if barracks_event_indexes[0] < mill_event_indexes[0]:
         strategy = (OpeningType.PremillDrush)
       else:
         strategy = (OpeningType.PostmillDrush)
     elif scout_event_indexes and archer_event_indexes and not militia_event_indexes:
-      if scout_event_indexes[0] < archer_event_indexes[0]:
+      if scout_event_indexes[0] < archer_event_indexes[0] or stable_event_indexes[0] < archery_range_event_indexes[0]:
         strategy = (OpeningType.Scouts)
       else:
         strategy = (OpeningType.StraightArchers)
     elif scout_event_indexes and not archer_event_indexes and militia_event_indexes:
-      if scout_event_indexes[0] < militia_event_indexes[0]:
+      if scout_event_indexes[0] < militia_event_indexes[0] or stable_event_indexes[0] < militia_event_indexes[0]:
         strategy = (OpeningType.Scouts)
       #test for maa, drush is already accounted for
       elif militia_event_indexes[0] > feudal_event_indexes[0]:
         strategy = (OpeningType.Maa)
     elif not scout_event_indexes and archer_event_indexes and militia_event_indexes:
-      if archer_event_indexes[0] < militia_event_indexes[0]:
+      if archer_event_indexes[0] < militia_event_indexes[0] or archery_range_event_indexes[0] < militia_event_indexes[0]:
         strategy = (OpeningType.StraightArchers)
       #test for maa, drush is already accounted for
       elif militia_event_indexes[0] > feudal_event_indexes[0]:
@@ -353,14 +400,16 @@ def guess_strategy(players, header, civs):
 
 def print_events(players, header, civs, player_strategies):
   #output to std with information
-  print(const.DE_MAP_NAMES[header.de.selected_map_id])
+  if header is not None:
+    print(const.DE_MAP_NAMES[header.de.selected_map_id])
   
   player_num = 0
   for player in players:
     if not player:
       continue
-    print("Player: " + header.de.players[player_num].name.value.decode())
-    print("Civ: " + civs[header.de.players[player_num].civ_id])
+    if header is not None:
+      print("Player: " + header.de.players[player_num].name.value.decode())
+      print("Civ: " + civs[header.de.players[player_num].civ_id])
     print("Opener: " + str(player_strategies[player_num]))
     player_num += 1
     for unique_actions in player:
@@ -368,6 +417,7 @@ def print_events(players, header, civs, player_strategies):
     print("\n")
 
 if __name__ == '__main__':
-  players, header, civs = parse_replay(sys.argv[1])
-  player_strategies = guess_strategy(players, header, civs)
+  players, header, civs, loser_id = parse_replay(sys.argv[1])
+  player_strategies = guess_strategy(players)
+  print(loser_id, "Lost")
   print_events(players, header, civs, player_strategies)
