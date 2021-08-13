@@ -89,6 +89,18 @@ def connect_and_modify(statement, args):
   finally:
     conn.close()
 
+def connect_and_modify_with_generator(generator):
+  try:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    for statement, args in generator:
+      c.execute(statement, args)
+    conn.commit()
+  except Exception as e:
+    print(e)
+  finally:
+    conn.close()
+
 def connect_and_return(statement, args):
   try:
     conn = sqlite3.connect(DB_FILE)
@@ -118,9 +130,16 @@ def add_unparsed_match_player(player_id, match_id, civilization, victory):
   connect_and_modify("""INSERT OR IGNORE INTO match_players(player_id, match_id, civilization, victory) VALUES
                             (?,?,?,?)""", (player_id, match_id, civilization, victory))
 
-def add_match_player_action(match_player_id, event_type, event_id, time, duration):
-  connect_and_modify("""INSERT OR IGNORE INTO match_player_actions(match_player_id, event_type, event_id, time, duration) VALUES
-                            (?,?,?,?,?)""", (match_player_id, event_type, event_id, time, duration))
+def match_player_actions_generator(match_player_id, action_list):
+  statement = """INSERT OR IGNORE INTO match_player_actions
+                   (match_player_id, event_type, event_id, time, duration)
+                   VALUES (?,?,?,?,?)"""
+  for unique_action in action_list:
+    yield statement, (match_player_id, unique_action.event_type.value, unique_action.id, unique_action.timestamp, unique_action.duration)
+
+def add_match_player_actions(match_player_id, action_list):
+  generator = match_player_actions_generator(match_player_id, action_list)
+  connect_and_modify_with_generator(generator)
     
 def does_match_exist(match_id):
   match = connect_and_return("SELECT * FROM matches WHERE id=?", (match_id,))
@@ -185,8 +204,7 @@ if __name__ == '__main__':
       add_unparsed_match_player(player_ids[player_num], match_id, header.de.players[player_num].civ_id, winner_value)
       match_player_id = get_match_player_id(player_ids[player_num], match_id)
       #now add player actions
-      for unique_action in players[i]:
-        add_match_player_action(match_player_id, unique_action.event_type.value, unique_action.id, unique_action.timestamp, unique_action.duration)
+      add_match_player_actions(match_player_id, players[i])
       player_num += 1
 
   #now do analytics
