@@ -9,7 +9,7 @@ from collections import OrderedDict
 from enum import Enum
 
 
-PARSER_VERSION = 1
+PARSER_VERSION = 2 #fixed fc strategy collision
 aoe_data = None
 
 class EventType(Enum):
@@ -36,7 +36,7 @@ class OpeningType(Enum):
   StraightArchers=13
   StraightArchers1Range=14
   StraightArchers2Range=15
-  FastCastle=16
+  FastCastle=17
 
 # UNIT IDS #
 UNIT_IDS = {
@@ -352,12 +352,9 @@ def guess_strategy(players):
           
       index += 1
     #now analyze to find opening
-    strategy = []
     if not feudal_event_indexes:
-      strategy = (OpeningType.Unknown)
-      continue
-    print(scout_event_indexes, militia_event_indexes, archer_event_indexes, feudal_event_indexes, stable_event_indexes, archery_range_event_indexes)
-    if barracks_event_indexes and mill_event_indexes and militia_event_indexes and militia_event_indexes[0] < feudal_event_indexes[0]:
+      strategy = OpeningType.Unknown
+    elif barracks_event_indexes and mill_event_indexes and militia_event_indexes and militia_event_indexes[0] < feudal_event_indexes[0]:
       if barracks_event_indexes[0] < mill_event_indexes[0]:
         strategy = (OpeningType.PremillDrush)
       else:
@@ -368,12 +365,16 @@ def guess_strategy(players):
       else:
         strategy = (OpeningType.StraightArchers)
     elif scout_event_indexes and not archer_event_indexes and militia_event_indexes:
-      if scout_event_indexes[0] < militia_event_indexes[0] or stable_event_indexes[0] < militia_event_indexes[0]:
+      if not stable_event_indexes:
+        strategy = OpeningType.Unknown
+      elif scout_event_indexes[0] < militia_event_indexes[0] or stable_event_indexes[0] < militia_event_indexes[0]:
         strategy = (OpeningType.Scouts)
       #test for maa, drush is already accounted for
       elif militia_event_indexes[0] > feudal_event_indexes[0]:
         strategy = (OpeningType.Maa)
     elif not scout_event_indexes and archer_event_indexes and militia_event_indexes:
+      if not archery_range_event_indexes:
+        strategy = OpeningType.Unknown
       if archer_event_indexes[0] < militia_event_indexes[0] or archery_range_event_indexes[0] < militia_event_indexes[0]:
         strategy = (OpeningType.StraightArchers)
       #test for maa, drush is already accounted for
