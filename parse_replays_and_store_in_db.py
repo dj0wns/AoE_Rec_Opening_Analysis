@@ -208,7 +208,10 @@ if __name__ == '__main__':
       player_num += 1
 
   #now do analytics
-  for match_player in get_match_players_needing_update():
+  items_needing_update = get_match_players_needing_update()
+  completed_count = 0
+  for match_player in items_needing_update:
+    print(f'( {completed_count} / {len(items_needing_update)} )')
     #treat players opener regardless of opponent for this stage
     player_event_list = []
     events = []
@@ -216,7 +219,8 @@ if __name__ == '__main__':
       events.append(aoe_replay_stats.Event(aoe_replay_stats.EventType(action[2]), action[3], None, action[4], action[5]))
     player_event_list.append(events)
     player_strategies = aoe_replay_stats.guess_strategy(player_event_list)
-    aoe_replay_stats.print_events(player_event_list, None, None, player_strategies)
+    #aoe_replay_stats.print_events(player_event_list, None, None, player_strategies)
     
     #now just update match_player
     update_match_player(player_strategies[0].value, match_player[0])
+    completed_count += 1
