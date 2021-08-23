@@ -1,0 +1,8 @@
+Count games where one player opened 'X' and another opened 'Y' and player 1 won:
+
+Select COUNT(a.id)
+FROM matches m
+JOIN match_players a ON a.match_id = m.id
+JOIN match_players b ON b.match_id = m.id
+WHERE a.opening_id = 1 AND b.opening_id = 16 
+  AND a.victory = 1;
