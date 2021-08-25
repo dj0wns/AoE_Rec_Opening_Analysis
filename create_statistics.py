@@ -76,7 +76,7 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids
   args = (opening1, opening1, )
   return connect_and_return(query, args)[0]
  
-def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
+def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, ignore_mirrors = False):
   query = """SELECT COUNT(a.id)
              FROM match_players a
              JOIN matches m ON m.id = a.match_id
@@ -85,6 +85,8 @@ def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, 
                AND a.id != b.id
                AND """
   query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
+  if ignore_mirrors:
+    query += """AND a.civilization != b.civilization"""
   query += ';'
   return connect_and_return(query, ())[0][0]
   
@@ -107,6 +109,7 @@ def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids, include_ci
              JOIN matches m ON m.id = a.match_id
              join match_players b on a.match_id = b.match_id
              WHERE a.civilization = ?
+             AND a.civilization != b.civilization
              AND (a.victory = 1
              OR a.victory = 0)
              AND a.id != b.id
@@ -148,6 +151,7 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
   for name,value in aoe_data["civ_names"].items():
     civs[int(value)-10270] = name
 
+  total_matches = total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, True)
   for i in range(len(civilizations)):
     total, wins, losses = get_civilization_count(civilizations[i][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
     if total:
