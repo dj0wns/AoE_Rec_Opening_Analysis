@@ -86,4 +86,5 @@ if __name__ == '__main__':
 
   for i in range(len(civilizations)):
     total, wins, losses = get_civilization_count(civilizations[i][0])
-    print(f'{civs[civilizations[i][0]]} - {total} ({total/total_matches:.1%}), {wins}:{losses} ({wins/total:.1%})')
+    #divide play rate by 2 because there are 2 civs chosen for every match!
+    print(f'{civs[civilizations[i][0]]} - {total} ({total/total_matches/2.:.1%}), {wins}:{losses} ({wins/total:.1%})')
