@@ -59,7 +59,6 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids, incl
                AND """
   query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
   query += ';'
-  #print(query)
   args = (opening1, opening2, )
   return connect_and_return(query, args)[0]
 
@@ -81,9 +80,11 @@ def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, 
   query = """SELECT COUNT(a.id)
              FROM match_players a
              JOIN matches m ON m.id = a.match_id
+             join match_players b on a.match_id = b.match_id
              WHERE a.victory = 1 
-               AND"""
-  query += arguments_to_query_string('m', 'a', 'a', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
+               AND a.id != b.id
+               AND """
+  query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
   query += ';'
   return connect_and_return(query, ())[0][0]
   
