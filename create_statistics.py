@@ -4,11 +4,14 @@ import argparse
 
 from parse_replays_and_store_in_db import connect_and_return
 
-def arguments_to_query_string(match_table_tag, match_playera_table_tag, match_playerb_table_tag, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
+def arguments_to_query_string(match_table_tag, match_playera_table_tag, match_playerb_table_tag, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror = False):
   string = "("
   string += f'{match_table_tag}.average_elo > {minimum_elo}\n'
   string += f'  AND {match_table_tag}.average_elo < {maximum_elo}\n'
   
+  if no_mirror:
+    string += f'  AND {match_playera_table_tag}.civilization != {match_playerb_table_tag}.civilization\n'
+
   if map_ids is not None:
     string += '  AND ('
     for i in range(len(map_ids)):
@@ -45,7 +48,7 @@ def arguments_to_query_string(match_table_tag, match_playera_table_tag, match_pl
   string += ")"
   return string
 
-def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
+def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror):
   query = """SELECT
                sum(CASE WHEN a.victory = 1 OR a.victory = 0 THEN 1 ELSE 0 END) as Total,
                sum(CASE WHEN a.victory = 1 THEN 1 ELSE 0 END) AS FirstOpeningWins,
@@ -57,12 +60,12 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids, incl
              WHERE a.opening_id = ? AND b.opening_id = ?
                AND a.id != b.id
                AND """
-  query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
+  query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror)
   query += ';'
   args = (opening1, opening2, )
   return connect_and_return(query, args)[0]
 
-def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
+def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror):
   query = """SELECT COUNT(a.id)
              FROM matches m
              JOIN match_players a ON a.match_id = m.id
@@ -71,7 +74,7 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids
                AND a.id != b.id
                AND a.victory = 1
                AND"""
-  query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
+  query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror)
   query += ';'
   args = (opening1, opening1, )
   return connect_and_return(query, args)[0]
@@ -119,9 +122,9 @@ def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids, include_ci
   query += ';'
   return connect_and_return(query, (civ_id,))[0]
 
-def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
+def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror):
   strategies = get_strategies()
-  total_matches = total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
+  total_matches = total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror)
   if not total_matches:
     print ("No matches found matching the criteria")
     return
@@ -131,12 +134,12 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids):
   for i in range(len(strategies)):
     for j in range(i, len(strategies)):
       if i == j:
-        total = mirror_matchups(strategies[i][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)[0]
+        total = mirror_matchups(strategies[i][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror)[0]
         if total:
           print(f'{strategies[i][1]} vs {strategies[j][1]} : {total} ({total/total_matches:.1%})')
 
       else:
-        total, firstwins, secondwins, unknown = opening_matchups(strategies[i][0],strategies[j][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids)
+        total, firstwins, secondwins, unknown = opening_matchups(strategies[i][0],strategies[j][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror)
         if total:
           print(f'{strategies[i][1]} vs {strategies[j][1]}: {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns')
   
@@ -166,6 +169,7 @@ if __name__ == '__main__':
   parser.add_argument("-m", "--map-ids", help="Restrict all results to these map ids", type=int, action='append', nargs='+')
   parser.add_argument("-c", "--include-civ-ids", help="Include any matches with at least 1 of these civs", type=int, action='append', nargs='+')
   parser.add_argument("-C", "--clamp-civ-ids", help="Only include games where matches only have civs in this pool", type=int, action='append', nargs='+')
+  parser.add_argument("-n", "--no-mirror", help="Remove games where there are mirror matches", action='store_true')
   args = parser.parse_args()
 
-  execute(args.minimum_elo, args.maximum_elo, args.map_ids, args.include_civ_ids, args.clamp_civ_ids)
+  execute(args.minimum_elo, args.maximum_elo, args.map_ids, args.include_civ_ids, args.clamp_civ_ids, args.no_mirror)
