@@ -164,9 +164,8 @@ if __name__ == '__main__':
   parser.add_argument("-e", "--minimum-elo", help="Minimum match elo for all results", type=int, default=0)
   parser.add_argument("-E", "--maximum-elo", help="Maximum match elo for all results", type=int, default=9999)
   parser.add_argument("-m", "--map-ids", help="Restrict all results to these map ids", type=int, action='append', nargs='+')
-  civ_pool = parser.add_mutually_exclusive_group()
-  civ_pool.add_argument("-c", "--include-civ-ids", help="Include any matches with at least 1 of these civs", type=int, action='append', nargs='+')
-  civ_pool.add_argument("-C", "--clamp-civ-ids", help="Only include games where matches only have civs in this pool", type=int, action='append', nargs='+')
+  parser.add_argument("-c", "--include-civ-ids", help="Include any matches with at least 1 of these civs", type=int, action='append', nargs='+')
+  parser.add_argument("-C", "--clamp-civ-ids", help="Only include games where matches only have civs in this pool", type=int, action='append', nargs='+')
   args = parser.parse_args()
 
   execute(args.minimum_elo, args.maximum_elo, args.map_ids, args.include_civ_ids, args.clamp_civ_ids)
