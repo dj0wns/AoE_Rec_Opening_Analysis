@@ -16,7 +16,8 @@ def arguments_to_query_string(match_table_tag,
                               no_mirror,
                               exclude_civ_ids,
                               include_ladder_ids,
-                              include_patch_ids):
+                              include_patch_ids,
+                              clamp_player1 = False):
   string = "("
   string += f'{match_table_tag}.average_elo > {minimum_elo}\n'
   string += f'  AND {match_table_tag}.average_elo < {maximum_elo}\n'
@@ -40,7 +41,8 @@ def arguments_to_query_string(match_table_tag,
         if i+j > 0:
           string +='    OR '
         string += f'{match_playera_table_tag}.civilization = {include_civ_ids[i][j]}\n'
-        string += f'    OR {match_playerb_table_tag}.civilization = {include_civ_ids[i][j]}\n'
+        if not clamp_player1:
+          string += f'    OR {match_playerb_table_tag}.civilization = {include_civ_ids[i][j]}\n'
     string += '       )\n'
 
   if clamp_civ_ids is not None:
@@ -166,7 +168,8 @@ def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids, includ
                                      no_mirror,
                                      exclude_civ_ids,
                                      include_ladder_ids,
-                                     include_patch_ids)
+                                     include_patch_ids,
+                                     True)
   query += 'ORDER BY a.id;'
   args = (opening1, )
   return connect_and_return(query, args)
