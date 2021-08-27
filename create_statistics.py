@@ -139,7 +139,6 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids
                                      include_ladder_ids,
                                      include_patch_ids)
   query += ';'
-  print(query)
   args = (opening1, opening1, )
   return connect_and_return(query, args)[0]
 
