@@ -9,12 +9,22 @@ import re
 def parse_filename(fname):
   head, tail = os.path.split(fname)
   print(tail)
-  m = re.search(r'([^_]+)_([^_]+)_vs_([^_]+)-([^_.]+)', tail)
-  match_id = m.group(1)
-  player1_id = m.group(2)
-  player2_id = m.group(3)
-  average_elo = m.group(4)
-  return match_id, player1_id, player2_id, average_elo
+  m = re.search(r'([^_]+)_([^_]+)_vs_([^_]+)-([^_.]+)\(([^_.]+)\)', tail)
+  if m:
+    match_id = m.group(1)
+    player1_id = m.group(2)
+    player2_id = m.group(3)
+    average_elo = m.group(4)
+    ladder = m.group(5)
+  else:
+    m = re.search(r'([^_]+)_([^_]+)_vs_([^_]+)-([^_.]+)', tail)
+    if m:
+      match_id = m.group(1)
+      player1_id = m.group(2)
+      player2_id = m.group(3)
+      average_elo = m.group(4)
+      ladder = 3
+  return match_id, player1_id, player2_id, average_elo, ladder
 
 if __name__ == '__main__':
   if len(sys.argv) > 1:
@@ -37,7 +47,8 @@ if __name__ == '__main__':
   for match in matches:
     if not match["ranked"]:
       continue
-    if match["leaderboard_id"] != 3:
+    #1v1 rm and empire wars only
+    if match["leaderboard_id"] != 3 and match["leaderboard_id"] != 13:
       continue
     match_id = match["match_id"]
     average_rating = 0
@@ -50,7 +61,7 @@ if __name__ == '__main__':
       average_rating = round(average_rating / divisor)
     
     #if file already exists go to next game, dont want to download games we already have
-    replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}.aoe2record'
+    replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}({match["leaderboard_id"]}).aoe2record'
     if os.path.exists(replay_name):
       continue
   

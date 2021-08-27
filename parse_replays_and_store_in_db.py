@@ -24,7 +24,9 @@ def init_db():
                             id integer NOT NULL PRIMARY KEY,
                             average_elo integer NOT NULL,
                             map_id integer NOT NULL,
-                            time datetime DEFAULT CURRENT_TIMESTAMP
+                            time datetime DEFAULT CURRENT_TIMESTAMP,
+                            patch_id float DEFAULT 25.01,
+                            ladder_id integer DEFAULT 3,
                             ) WITHOUT ROWID; """)
 
   sql_commands.append(""" CREATE TABLE IF NOT EXISTS players (
@@ -65,6 +67,11 @@ def init_db():
     print(e)
   finally:
     conn.close()
+
+def update_schema():
+  # First update to db, adding patch number and ladder id to matches
+  connect_and_modify("""ALTER TABLE matches ADD COLUMN patch_id float DEFAULT 25.01;""", ())
+  connect_and_modify("""ALTER TABLE matches ADD COLUMN ladder_id integer DEFAULT 3;""", ())
  
 ### UNIVERSAL SQL FUNCTIONS ###
 def connect_and_modify(statement):
@@ -118,8 +125,8 @@ def connect_and_return(statement, args):
 def add_player(player_id):
   connect_and_modify("INSERT OR IGNORE INTO players(id) VALUES(?)", (player_id,))
 
-def add_match(match_id, average_elo, map_id):
-  connect_and_modify("INSERT OR IGNORE INTO matches(id, average_elo, map_id) VALUES(?,?,?)", (match_id, average_elo, map_id))
+def add_match(match_id, average_elo, map_id, patch_id, ladder_id):
+  connect_and_modify("INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id) VALUES(?,?,?,?,?)", (match_id, average_elo, map_id, patch_id, ladder_id))
 
 def update_match_player(opening_id, match_player_id):
   connect_and_modify("""UPDATE match_players
@@ -168,11 +175,12 @@ def get_actions_for_match_player(match_player_id):
 
 if __name__ == '__main__':
   init_db()
+  update_schema()
   #import a folder of replays, first add replays to db and then do analysis after
   for file in os.listdir(sys.argv[1]):
     file = os.path.join(sys.argv[1], file)
     #important info in the map name
-    match_id, player1_id, player2_id, average_elo = grab_replays_for_player.parse_filename(file)
+    match_id, player1_id, player2_id, average_elo, ladder_id = grab_replays_for_player.parse_filename(file)
     #match already in db!
     if does_match_exist(match_id):
       continue
@@ -188,7 +196,7 @@ if __name__ == '__main__':
 
     add_player(player1_id)
     add_player(player2_id)
-    add_match(match_id, average_elo, header.de.selected_map_id)
+    add_match(match_id, average_elo, header.de.selected_map_id, header.save_version, ladder_id)
     
     for i in range(len(players)):
       if not players[i]:
