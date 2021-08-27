@@ -26,7 +26,7 @@ def init_db():
                             map_id integer NOT NULL,
                             time datetime DEFAULT CURRENT_TIMESTAMP,
                             patch_id float DEFAULT 25.01,
-                            ladder_id integer DEFAULT 3,
+                            ladder_id integer DEFAULT 3
                             ) WITHOUT ROWID; """)
 
   sql_commands.append(""" CREATE TABLE IF NOT EXISTS players (
