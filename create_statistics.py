@@ -5,6 +5,8 @@ import argparse
 from parse_replays_and_store_in_db import connect_and_return
 from aoe_replay_stats import output_time
 
+aoe_data = None
+
 def arguments_to_query_string(match_table_tag,
                               match_playera_table_tag,
                               match_playerb_table_tag,
@@ -34,41 +36,37 @@ def arguments_to_query_string(match_table_tag,
         string += f'{match_table_tag}.map_id = {map_ids[i][j]}\n'
     string += '       )\n'
 
-  if include_civ_ids is not None:
+  if include_civ_ids:
     string += '  AND ('
     for i in range(len(include_civ_ids)):
-      for j in range(len(include_civ_ids[i])):
-        if i+j > 0:
-          string +='    OR '
-        string += f'{match_playera_table_tag}.civilization = {include_civ_ids[i][j]}\n'
-        if not clamp_player1:
-          string += f'    OR {match_playerb_table_tag}.civilization = {include_civ_ids[i][j]}\n'
+      if i > 0:
+        string +='    OR '
+      string += f'{match_playera_table_tag}.civilization = {include_civ_ids[i]}\n'
+      if not clamp_player1:
+        string += f'    OR {match_playerb_table_tag}.civilization = {include_civ_ids[i]}\n'
     string += '       )\n'
 
-  if clamp_civ_ids is not None:
+  if clamp_civ_ids:
     string += '  AND ('
     for i in range(len(clamp_civ_ids)):
-      for j in range(len(clamp_civ_ids[i])):
-        if i+j > 0:
-          string +='    OR '
-        string += f'{match_playera_table_tag}.civilization = {clamp_civ_ids[i][j]}\n'
+      if i > 0:
+        string +='    OR '
+      string += f'{match_playera_table_tag}.civilization = {clamp_civ_ids[i]}\n'
     string += '       )\n  AND ('
     for i in range(len(clamp_civ_ids)):
-      for j in range(len(clamp_civ_ids[i])):
-        if i+j > 0:
-          string +='    OR '
-        string += f'{match_playerb_table_tag}.civilization = {clamp_civ_ids[i][j]}\n'
+      if i > 0:
+        string +='    OR '
+      string += f'{match_playerb_table_tag}.civilization = {clamp_civ_ids[i]}\n'
     string += '       )\n'
   string += ")"
 
-  if exclude_civ_ids is not None:
+  if exclude_civ_ids:
     string += '  AND ('
     for i in range(len(exclude_civ_ids)):
-      for j in range(len(exclude_civ_ids[i])):
-        if i+j > 0:
-          string +='    AND '
-        string += f'{match_playera_table_tag}.civilization != {exclude_civ_ids[i][j]}\n'
-        string += f'    AND {match_playerb_table_tag}.civilization != {exclude_civ_ids[i][j]}\n'
+      if i > 0:
+        string +='    AND '
+      string += f'{match_playera_table_tag}.civilization != {exclude_civ_ids[i]}\n'
+      string += f'    AND {match_playerb_table_tag}.civilization != {exclude_civ_ids[i]}\n'
     string += '       )\n'
 
   if include_ladder_ids is not None:
@@ -144,6 +142,7 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids
   args = (opening1, opening1, )
   return connect_and_return(query, args)[0]
 
+#Clamps to included civs!
 def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror, exclude_civ_ids, include_ladder_ids, include_patch_ids):
   query = """SELECT a.id, c.event_id, c.time, c.duration
              FROM matches m
@@ -243,8 +242,6 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, n
   strategies = get_strategies()
   total_matches = total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror, exclude_civ_ids, include_ladder_ids, include_patch_ids)
 
-  with open(os.path.join('aoe2techtree', 'data', 'data.json')) as json_file:
-   aoe_data = json.load(json_file)
 
   if not total_matches:
     print ("No matches found matching the criteria")
@@ -313,6 +310,35 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, n
       #divide play rate by 2 because there are 2 civs chosen for every match!
       print(f'{civs[civilizations[i][0]]} - {total} ({total/total_matches/2.:.1%}), {wins}:{losses} ({wins/total:.1%})')
 
+def names_to_ids(include_civ_ids, clamp_civ_ids, exclude_civ_ids):
+  new_include_civ_ids = []
+  new_clamp_civ_ids = []
+  new_exclude_civ_ids = []
+  if include_civ_ids is not None:
+    for i in range(len(include_civ_ids)):
+      for j in range(len(include_civ_ids[i])):
+        if include_civ_ids[i][j] in aoe_data["civ_names"]:
+          new_include_civ_ids.append(int(aoe_data["civ_names"][include_civ_ids[i][j]]) - 10270)
+        else:
+          print(f'{include_civ_ids[i][j]} is not a valid civ name!')
+          exit(0)
+  if clamp_civ_ids is not None:
+    for i in range(len(clamp_civ_ids)):
+      for j in range(len(clamp_civ_ids[i])):
+        if clamp_civ_ids[i][j] in aoe_data["civ_names"]:
+          new_clamp_civ_ids.append(int(aoe_data["civ_names"][clamp_civ_ids[i][j]]) - 10270)
+        else:
+          print(f'{clamp_civ_ids[i][j]} is not a valid civ name!')
+          exit(0)
+  if exclude_civ_ids is not None:
+    for i in range(len(exclude_civ_ids)):
+      for j in range(len(exclude_civ_ids[i])):
+        if exclude_civ_ids[i][j] in aoe_data["civ_names"]:
+          new_exclude_civ_ids.append(int(aoe_data["civ_names"][exclude_civ_ids[i][j]]) - 10270)
+        else:
+          print(f'{exclude_civ_ids[i][j]} is not a valid civ name!')
+          exit(0)
+  return new_include_civ_ids, new_clamp_civ_ids, new_exclude_civ_ids
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description="Build tailored statistics from the replay database")
@@ -321,10 +347,13 @@ if __name__ == '__main__':
   parser.add_argument("-l", "--include-ladder-ids", help="Only include games played on these ladders (3=1v1, 13=EW)", type=int, action='append', nargs='+')
   parser.add_argument("-p", "--include-patch-ids", help="Only include games played on these patches (current as of writing this is 25.01)", type=str, action='append', nargs='+')
   parser.add_argument("-m", "--map-ids", help="Restrict all results to these map ids", type=int, action='append', nargs='+')
-  parser.add_argument("-c", "--include-civ-ids", help="Include any matches with at least 1 of these civs", type=int, action='append', nargs='+')
-  parser.add_argument("-C", "--clamp-civ-ids", help="Only include games where matches only have civs in this pool", type=int, action='append', nargs='+')
-  parser.add_argument("-x", "--exclude-civ-ids", help="Remove games where these civs are present", type=int, action='append', nargs='+')
+  parser.add_argument("-c", "--include-civ-names", help="Include any matches with at least 1 of these civs", type=str, action='append', nargs='+')
+  parser.add_argument("-C", "--clamp-civ-names", help="Only include games where matches only have civs in this pool", type=str, action='append', nargs='+')
+  parser.add_argument("-x", "--exclude-civ-names", help="Remove games where these civs are present", type=str, action='append', nargs='+')
   parser.add_argument("-n", "--no-mirror", help="Remove games where there are mirror matches", action='store_true')
   args = parser.parse_args()
 
-  execute(args.minimum_elo, args.maximum_elo, args.map_ids, args.include_civ_ids, args.clamp_civ_ids, args.no_mirror, args.exclude_civ_ids, args.include_ladder_ids, args.include_patch_ids)
+  with open(os.path.join('aoe2techtree', 'data', 'data.json')) as json_file:
+   aoe_data = json.load(json_file)
+  include_civ_ids, clamp_civ_ids, exclude_civ_ids = names_to_ids(args.include_civ_names, args.clamp_civ_names, args.exclude_civ_names)
+  execute(args.minimum_elo, args.maximum_elo, args.map_ids, include_civ_ids, clamp_civ_ids, args.no_mirror, exclude_civ_ids, args.include_ladder_ids, args.include_patch_ids)
