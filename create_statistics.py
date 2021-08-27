@@ -281,18 +281,17 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, n
     imperial_time = output_time(imperial/imperial_count + int(aoe_data["data"]["techs"][str(103)]["ResearchTime"])*1000)
     print(f'{strategies[i][1]}: Feudal: {feudal_time}, Castle: {castle_time}, Imperial: {imperial_time}')
 
-  print ("")
   for i in range(len(strategies)):
     for j in range(i, len(strategies)):
       if i == j:
         total = mirror_matchups(strategies[i][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror, exclude_civ_ids, include_ladder_ids, include_patch_ids)[0]
         if total:
-          print(f'{strategies[i][1]} vs {strategies[j][1]} : {total} ({total/total_matches:.1%})')
+          print(f'{strategies[i][1]} vs {strategies[j][1]} - {total} ({total/total_matches:.1%})')
 
       else:
         total, firstwins, secondwins, unknown = opening_matchups(strategies[i][0],strategies[j][0], minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids, no_mirror, exclude_civ_ids, include_ladder_ids, include_patch_ids)
         if total:
-          print(f'{strategies[i][1]} vs {strategies[j][1]}: {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns')
+          print(f'{strategies[i][1]} vs {strategies[j][1]} - {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns')
 
   #Go through civilizations
   print('\nCivilization Stats!')
