@@ -5,6 +5,7 @@ import os
 import io
 import time
 import re
+import argparse
 
 def parse_filename(fname):
   head, tail = os.path.split(fname)
@@ -26,18 +27,18 @@ def parse_filename(fname):
       ladder = 3
   return match_id, player1_id, player2_id, average_elo, ladder
 
-if __name__ == '__main__':
-  if len(sys.argv) > 1:
+def execute(minimum_elo, maximum_elo, output_folder, player_id):
+  if player_id:
     #specific player
-    matches = requests.get(f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={sys.argv[1]}&count=1000")
+    matches = requests.get(f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=1000")
     path = sys.argv[1]
   else:
     #get most recent 1000 matching with a 2 hour delay to ensure that the replays had time to get set
-    time = round(time.time_ns()/1000000000) - 2*60*60
+    search_time = round(time.time_ns()/1000000000) - 2*60*60
   
-    matches = requests.get(f"https://aoe2.net/api/matches?game=aoe2de&count=1000&since={time}")
+    matches = requests.get(f"https://aoe2.net/api/matches?game=aoe2de&count=1000&since={search_time}")
     print(matches.url)
-    path = "All Matches"
+    path = output_folder
   
   matches = matches.json()
   
@@ -59,6 +60,8 @@ if __name__ == '__main__':
         divisor +=1
     if divisor:
       average_rating = round(average_rating / divisor)
+    if average_rating < minimum_elo or average_rating > maximum_elo:
+      continue
     
     #if file already exists go to next game, dont want to download games we already have
     replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}({match["leaderboard_id"]}).aoe2record'
@@ -78,3 +81,13 @@ if __name__ == '__main__':
         with open(os.path.join(path, replay_name), 'wb') as f:
           f.write(replay)
         break
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser(description="Build tailored statistics from the replay database")
+  parser.add_argument("-e", "--minimum-elo", help="Minimum match elo for all results", type=int, default=0)
+  parser.add_argument("-E", "--maximum-elo", help="Maximum match elo for all results", type=int, default=9999)
+  parser.add_argument("-o", "--output-folder", help="Folder to save recs to", type=str, default="All Matches")
+  parser.add_argument("-i", "--player-id", help="[OPTIONAL] Id for single player to fetch data for - defaults to all players", type=int, default=0)
+
+  args = parser.parse_args()
+  execute(args.minimum_elo, args.maximum_elo, args.output_folder, args.player_id)
