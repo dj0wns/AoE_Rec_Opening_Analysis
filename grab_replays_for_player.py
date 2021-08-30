@@ -31,15 +31,14 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id):
   if player_id:
     #specific player
     matches = requests.get(f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=1000")
-    path = sys.argv[1]
   else:
     #get most recent 1000 matching with a 2 hour delay to ensure that the replays had time to get set
     search_time = round(time.time_ns()/1000000000) - 2*60*60
   
     matches = requests.get(f"https://aoe2.net/api/matches?game=aoe2de&count=1000&since={search_time}")
     print(matches.url)
-    path = output_folder
   
+  path = output_folder
   matches = matches.json()
   
   if not os.path.exists(path):
