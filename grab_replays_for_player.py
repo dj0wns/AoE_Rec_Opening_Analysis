@@ -60,6 +60,10 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
         if match["leaderboard_id"] != 3 and match["leaderboard_id"] != 13:
             continue
         match_id = match["match_id"]
+        #check if already in db!
+        if add_to_db:
+            if parse_replays_and_store_in_db.does_match_exist(match_id):
+                continue
         average_rating = 0
         divisor = 0
         for player in match["players"]:
