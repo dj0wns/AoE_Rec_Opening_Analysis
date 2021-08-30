@@ -37,6 +37,10 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
         matches = requests.get(
             f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=1000"
         )
+        print(r.url)
+        print(r.status_code)
+        if r.status_code != 200:
+            return
     else:
         #get most recent 1000 matching with a 2 hour delay to ensure that the replays had time to get set
         search_time = round(time.time_ns() / 1000000000) - 2 * 60 * 60
@@ -147,6 +151,8 @@ if __name__ == '__main__':
         while True:
             execute(args.minimum_elo, args.maximum_elo, args.output_folder,
                     args.player_id, args.add_to_db)
+            #sleep 1 minute between requests to avoid ddosing aoe2.net if the api is down
+            time.sleep(60)
     else:
         execute(args.minimum_elo, args.maximum_elo, args.output_folder,
                 args.player_id, args.add_to_db)
