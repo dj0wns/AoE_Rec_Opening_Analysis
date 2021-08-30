@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import json
+import io
 from mgz import header, fast, enums, const
 from mgz.enums import OperationEnum
 from construct import Byte
@@ -224,7 +225,7 @@ class Event:
             self.name = 'Resignation'
 
 
-def parse_replay(replay_file):
+def parse_replay(data):
     #lazily init players
     players = []
     for i in range(9):
@@ -242,82 +243,83 @@ def parse_replay(replay_file):
 
     time = 0
 
-    with open(replay_file, 'rb') as data:
+    if type(data) is io.BytesIO:
+        eof = len(data.getvalue())
+    else:
         eof = os.fstat(data.fileno()).st_size
-        h = header.parse_stream(data)
-        loser_index = None
-        fast.meta(data)
-        while data.tell() < eof:
-            o = fast.operation(data)
-            if o[0] == fast.Operation.ACTION:
-                if o[1][0] == fast.Action.DE_QUEUE:
-                    player_id = o[1][1]["player_id"]
-                    unit_id = o[1][1]["unit_id"]
-                    event = None
-                    if unit_id in ID_UNITS:
-                        event = Event(EventType.UNIT, unit_id,
-                                      ID_UNITS[unit_id], time)
-                    elif str(unit_id) in aoe_data["data"]["units"]:
-                        #unit not found in local records
-                        name = f'{aoe_data["data"]["units"][str(unit_id)]["internal_name"]} ({unit_id})'
-                        event = Event(EventType.UNIT, unit_id, name, time)
-                    else:
-                        name = f'{unit_id}'
-                        event = Event(EventType.UNIT, unit_id, name, time)
-                    players[player_id].append(event)
 
-                elif o[1][0] == fast.Action.RESEARCH:
-                    player_id = o[1][1]["player_id"]
-                    technology_id = o[1][1]["technology_id"]
-                    string = ""
-                    duration = 0
-                    if str(technology_id) in aoe_data["data"]["techs"]:
-                        duration = int(aoe_data["data"]["techs"][str(
-                            technology_id)]["ResearchTime"]) * 1000
-                    event = None
-                    if technology_id in ID_TECHS:
-                        event = Event(EventType.TECH, technology_id,
-                                      ID_TECHS[technology_id], time, duration)
-                    elif str(technology_id) in aoe_data["data"]["techs"]:
-                        name = f'{aoe_data["data"]["techs"][str(technology_id)]["internal_name"]} ({technology_id})'
-                        event = Event(EventType.TECH, technology_id, name, time,
-                                      duration)
-                    else:
-                        name = f'{technology_id}'
-                        event = Event(EventType.TECH, technology_id, name, time,
-                                      duration)
+    h = header.parse_stream(data)
+    loser_index = None
+    fast.meta(data)
+    while data.tell() < eof:
+        o = fast.operation(data)
+        if o[0] == fast.Operation.ACTION:
+            if o[1][0] == fast.Action.DE_QUEUE:
+                player_id = o[1][1]["player_id"]
+                unit_id = o[1][1]["unit_id"]
+                event = None
+                if unit_id in ID_UNITS:
+                    event = Event(EventType.UNIT, unit_id, ID_UNITS[unit_id],
+                                  time)
+                elif str(unit_id) in aoe_data["data"]["units"]:
+                    #unit not found in local records
+                    name = f'{aoe_data["data"]["units"][str(unit_id)]["internal_name"]} ({unit_id})'
+                    event = Event(EventType.UNIT, unit_id, name, time)
+                else:
+                    name = f'{unit_id}'
+                    event = Event(EventType.UNIT, unit_id, name, time)
+                players[player_id].append(event)
 
-                    found_item = item_in_list(event, players[player_id])
-                    if found_item:
-                        players[player_id].remove(found_item)
+            elif o[1][0] == fast.Action.RESEARCH:
+                player_id = o[1][1]["player_id"]
+                technology_id = o[1][1]["technology_id"]
+                string = ""
+                duration = 0
+                if str(technology_id) in aoe_data["data"]["techs"]:
+                    duration = int(aoe_data["data"]["techs"][str(technology_id)]
+                                   ["ResearchTime"]) * 1000
+                event = None
+                if technology_id in ID_TECHS:
+                    event = Event(EventType.TECH, technology_id,
+                                  ID_TECHS[technology_id], time, duration)
+                elif str(technology_id) in aoe_data["data"]["techs"]:
+                    name = f'{aoe_data["data"]["techs"][str(technology_id)]["internal_name"]} ({technology_id})'
+                    event = Event(EventType.TECH, technology_id, name, time,
+                                  duration)
+                else:
+                    name = f'{technology_id}'
+                    event = Event(EventType.TECH, technology_id, name, time,
+                                  duration)
 
-                    players[player_id].append(event)
+                found_item = item_in_list(event, players[player_id])
+                if found_item:
+                    players[player_id].remove(found_item)
 
-                elif o[1][0] == fast.Action.BUILD:
-                    player_id = o[1][1]["player_id"]
-                    building_id = o[1][1]["building_id"]
-                    string = ""
-                    if building_id in ID_BUILDINGS:
-                        event = Event(EventType.BUILDING, building_id,
-                                      ID_BUILDINGS[building_id], time)
-                    elif building_id in aoe_data["data"]["buildings"]:
-                        name = f'{aoe_data["data"]["buildings"][str(building_id)]["internal_name"]} ({building_id})'
-                        event = Event(EventType.BUILDING, building_id, name,
-                                      time)
-                    else:
-                        name = f'{building_id}'
-                        event = Event(EventType.BUILDING, building_id, name,
-                                      time)
-                    players[player_id].append(event)
+                players[player_id].append(event)
 
-                elif o[1][0] == fast.Action.RESIGN:
-                    name = 'Resignation'
-                    player_id = o[1][1]["player_id"]
-                    event = Event(EventType.RESIGN, 0, name, time)
-                    players[player_id].append(event)
-                    loser_index = player_id
-            elif o[0] == fast.Operation.SYNC:
-                time += o[1][0]
+            elif o[1][0] == fast.Action.BUILD:
+                player_id = o[1][1]["player_id"]
+                building_id = o[1][1]["building_id"]
+                string = ""
+                if building_id in ID_BUILDINGS:
+                    event = Event(EventType.BUILDING, building_id,
+                                  ID_BUILDINGS[building_id], time)
+                elif building_id in aoe_data["data"]["buildings"]:
+                    name = f'{aoe_data["data"]["buildings"][str(building_id)]["internal_name"]} ({building_id})'
+                    event = Event(EventType.BUILDING, building_id, name, time)
+                else:
+                    name = f'{building_id}'
+                    event = Event(EventType.BUILDING, building_id, name, time)
+                players[player_id].append(event)
+
+            elif o[1][0] == fast.Action.RESIGN:
+                name = 'Resignation'
+                player_id = o[1][1]["player_id"]
+                event = Event(EventType.RESIGN, 0, name, time)
+                players[player_id].append(event)
+                loser_index = player_id
+        elif o[0] == fast.Operation.SYNC:
+            time += o[1][0]
 
     return players, h, civs, loser_index
 

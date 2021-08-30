@@ -7,6 +7,8 @@ import time
 import re
 import argparse
 
+import parse_replays_and_store_in_db
+
 
 def parse_filename(fname):
     head, tail = os.path.split(fname)
@@ -29,7 +31,7 @@ def parse_filename(fname):
     return match_id, player1_id, player2_id, average_elo, ladder
 
 
-def execute(minimum_elo, maximum_elo, output_folder, player_id):
+def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
     if player_id:
         #specific player
         matches = requests.get(
@@ -44,11 +46,12 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id):
         )
         print(matches.url)
 
-    path = output_folder
     matches = matches.json()
 
-    if not os.path.exists(path):
-        os.mkdir(path)
+    if not add_to_db:
+        path = output_folder
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     for match in matches:
         if not match["ranked"]:
@@ -84,9 +87,15 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id):
                 #now unzip it
                 replay_zip = zipfile.ZipFile(io.BytesIO(r.content))
                 replay = replay_zip.read(replay_zip.namelist()[0])
-
-                with open(os.path.join(path, replay_name), 'wb') as f:
-                    f.write(replay)
+                if add_to_db:
+                    #Write directly to db!
+                    parse_replays_and_store_in_db.parse_replay_file(
+                        match_id, match["players"][0]["profile_id"],
+                        match["players"][1]["profile_id"], average_rating,
+                        match["leaderboard_id"], io.BytesIO(replay))
+                else:
+                    with open(os.path.join(path, replay_name), 'wb') as f:
+                        f.write(replay)
                 break
 
 
@@ -108,6 +117,10 @@ if __name__ == '__main__':
                         help="Folder to save recs to",
                         type=str,
                         default="All Matches")
+    parser.add_argument("-a",
+                        "--add-to-db",
+                        help="Add files directly to db, don't save locally",
+                        action='store_true')
     parser.add_argument(
         "-i",
         "--player-id",
@@ -117,5 +130,9 @@ if __name__ == '__main__':
         default=0)
 
     args = parser.parse_args()
+    #make sure db exists and is updated!
+    if args.add_to_db:
+        parse_replays_and_store_in_db.init_db()
+        parse_replays_and_store_in_db.update_schema()
     execute(args.minimum_elo, args.maximum_elo, args.output_folder,
-            args.player_id)
+            args.player_id, args.add_to_db)

@@ -209,54 +209,65 @@ def get_actions_for_match_player(match_player_id):
     return match_player_actions
 
 
-def execute(input_folder, delete_replay_after_parse):
+def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
+                      file_data):
+    #match already in db!
+    if does_match_exist(match_id):
+        return False
+    try:
+        players, header, civs, loser_id = aoe_replay_stats.parse_replay(
+            file_data)
+    except Exception as e:
+        print(e)
+        return False
+    player_ids = [player1_id, player2_id]
+    player_num = 0
+
+    #now plug it into the db!
+    #first add players
+    add_player(player1_id)
+    add_player(player2_id)
+    add_match(match_id, average_elo, header.de.selected_map_id,
+              header.save_version, ladder_id)
+
+    for i in range(len(players)):
+        if not players[i]:
+            continue
+        # now add match player
+        winner_value = -1
+        if loser_id is not None:
+            if loser_id == i:
+                winner_value = 0
+            else:
+                winner_value = 1
+        #first add template match_player with basic info
+        add_unparsed_match_player(player_ids[player_num], match_id,
+                                  header.de.players[player_num].civ_id,
+                                  winner_value)
+        match_player_id = get_match_player_id(player_ids[player_num], match_id)
+        #now add player actions
+        add_match_player_actions(match_player_id, players[i])
+        player_num += 1
+
+    return True
+
+
+def execute(input_folder, delete_replay_after_parse, analysis_only):
     #import a folder of replays, first add replays to db and then do analysis after
-    for file in os.listdir(input_folder):
-        file = os.path.join(input_folder, file)
-        #important info in the map name
-        match_id, player1_id, player2_id, average_elo, ladder_id = grab_replays_for_player.parse_filename(
-            file)
-        #match already in db!
-        if does_match_exist(match_id):
-            continue
-        try:
-            players, header, civs, loser_id = aoe_replay_stats.parse_replay(
+    if not analysis_only:
+        for file in os.listdir(input_folder):
+            file = os.path.join(input_folder, file)
+            #important info in the map name
+            match_id, player1_id, player2_id, average_elo, ladder_id = grab_replays_for_player.parse_filename(
                 file)
-        except Exception as e:
-            print(e)
-            continue
-        #now plug it into the db!
-        #first add players
-        player_ids = [player1_id, player2_id]
-        player_num = 0
+            #match already in db!
+            with open(file, 'rb') as data:
+                success = parse_replay_file(match_id, player1_id, player2_id,
+                                            average_elo, ladder_id, data)
 
-        add_player(player1_id)
-        add_player(player2_id)
-        add_match(match_id, average_elo, header.de.selected_map_id,
-                  header.save_version, ladder_id)
-
-        for i in range(len(players)):
-            if not players[i]:
-                continue
-            # now add match player
-            winner_value = -1
-            if loser_id is not None:
-                if loser_id == i:
-                    winner_value = 0
-                else:
-                    winner_value = 1
-            #first add template match_player with basic info
-            add_unparsed_match_player(player_ids[player_num], match_id,
-                                      header.de.players[player_num].civ_id,
-                                      winner_value)
-            match_player_id = get_match_player_id(player_ids[player_num],
-                                                  match_id)
-            #now add player actions
-            add_match_player_actions(match_player_id, players[i])
-            player_num += 1
-        #Now delete file if flag was selected
-        if delete_replay_after_parse:
-            os.remove(file)
+            #Now delete file if flag was selected
+            if success and delete_replay_after_parse:
+                os.remove(file)
 
     #now do analytics
     items_needing_update = get_match_players_needing_update()
@@ -287,6 +298,11 @@ if __name__ == '__main__':
                         type=str,
                         default=0)
     parser.add_argument(
+        "-a",
+        "--analysis-only",
+        help="Don't parse any new replays, just perform analysis",
+        action='store_true')
+    parser.add_argument(
         "-o",
         "--output-db",
         help="Point to a specific sqlite3 db to insert data into",
@@ -302,4 +318,4 @@ if __name__ == '__main__':
     DB_FILE = args.output_db
     init_db()
     update_schema()
-    execute(args.input, args.delete_replay_after_parse)
+    execute(args.input, args.delete_replay_after_parse, args.analysis_only)
