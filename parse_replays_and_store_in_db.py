@@ -235,11 +235,13 @@ def execute(input_folder, delete_replay_after_parse):
     completed_count += 1
 
 if __name__ == '__main__':
-  init_db()
-  update_schema()
   parser = argparse.ArgumentParser(description="Parse replays in folder and store them in the DB")
   parser.add_argument("input", help="Folder to draw replays from", type=str, default=0)
+  parser.add_argument("-o", "--output-db", help="Point to a specific sqlite3 db to insert data into", type=str, default=DB_FILE)
   parser.add_argument("-X", "--delete-replay-after-parse", help="If set, this will delete replays after they have been parsed", action='store_true')
 
   args = parser.parse_args()
+  DB_FILE = args.output_db
+  init_db()
+  update_schema()
   execute(args.input, args.delete_replay_after_parse)
