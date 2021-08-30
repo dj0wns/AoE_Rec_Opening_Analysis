@@ -247,6 +247,7 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
                                             no_mirror, exclude_civ_ids,
                                             include_ladder_ids,
                                             include_patch_ids, player_ids)
+    print (f'{total_matches} matches in query!\n')
 
     if not total_matches:
         print("No matches found matching the criteria")
