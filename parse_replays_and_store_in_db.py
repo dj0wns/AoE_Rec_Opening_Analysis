@@ -4,6 +4,7 @@ import grab_replays_for_player
 import os
 import re
 import sys
+import argparse
 
 fpath=os.path.realpath(__file__)
 path=os.path.dirname(fpath)
@@ -171,14 +172,11 @@ def get_actions_for_match_player(match_player_id):
   if len(match_player_actions) == 0: 
     return None
   return match_player_actions
-  
 
-if __name__ == '__main__':
-  init_db()
-  update_schema()
+def execute(input_folder, delete_replay_after_parse):
   #import a folder of replays, first add replays to db and then do analysis after
-  for file in os.listdir(sys.argv[1]):
-    file = os.path.join(sys.argv[1], file)
+  for file in os.listdir(input_folder):
+    file = os.path.join(input_folder, file)
     #important info in the map name
     match_id, player1_id, player2_id, average_elo, ladder_id = grab_replays_for_player.parse_filename(file)
     #match already in db!
@@ -214,6 +212,9 @@ if __name__ == '__main__':
       #now add player actions
       add_match_player_actions(match_player_id, players[i])
       player_num += 1
+    #Now delete file if flag was selected
+    if delete_replay_after_parse:
+      os.remove(file)
 
   #now do analytics
   items_needing_update = get_match_players_needing_update()
@@ -232,3 +233,13 @@ if __name__ == '__main__':
     #now just update match_player
     update_match_player(player_strategies[0].value, match_player[0])
     completed_count += 1
+
+if __name__ == '__main__':
+  init_db()
+  update_schema()
+  parser = argparse.ArgumentParser(description="Parse replays in folder and store them in the DB")
+  parser.add_argument("input", help="Folder to draw replays from", type=str, default=0)
+  parser.add_argument("-X", "--delete-replay-after-parse", help="If set, this will delete replays after they have been parsed", action='store_true')
+
+  args = parser.parse_args()
+  execute(args.input, args.delete_replay_after_parse)
