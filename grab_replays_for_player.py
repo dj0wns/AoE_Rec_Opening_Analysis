@@ -122,6 +122,11 @@ if __name__ == '__main__':
                         help="Add files directly to db, don't save locally",
                         action='store_true')
     parser.add_argument(
+        "-r",
+        "--repeat",
+        help="Run next query when first query finishes... forever and ever",
+        action='store_true')
+    parser.add_argument(
         "-i",
         "--player-id",
         help=
@@ -134,5 +139,10 @@ if __name__ == '__main__':
     if args.add_to_db:
         parse_replays_and_store_in_db.init_db()
         parse_replays_and_store_in_db.update_schema()
-    execute(args.minimum_elo, args.maximum_elo, args.output_folder,
-            args.player_id, args.add_to_db)
+    if args.repeat:
+        while True:
+            execute(args.minimum_elo, args.maximum_elo, args.output_folder,
+                    args.player_id, args.add_to_db)
+    else:
+        execute(args.minimum_elo, args.maximum_elo, args.output_folder,
+                args.player_id, args.add_to_db)
