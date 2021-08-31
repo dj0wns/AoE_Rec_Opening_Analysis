@@ -49,6 +49,9 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
             f"https://aoe2.net/api/matches?game=aoe2de&count=1000&since={search_time}"
         )
         print(matches.url)
+        print(matches.status_code)
+        if matches.status_code != 200:
+            return
 
     matches = matches.json()
 
