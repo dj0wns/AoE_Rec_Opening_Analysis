@@ -370,6 +370,7 @@ def guess_strategy(players):
 
             index += 1
         #now analyze to find opening
+        strategy = OpeningType.Unknown
         if not feudal_event_indexes:
             strategy = OpeningType.Unknown
         elif barracks_event_indexes and mill_event_indexes and militia_event_indexes and militia_event_indexes[
