@@ -170,7 +170,7 @@ def get_matches():
 
 
 def update_match_player(opening_id, match_player_id):
-    connect_and_modify(
+    return(
         """UPDATE match_players
                         SET opening_id = ?, parser_version = ?, time_parsed = CURRENT_TIMESTAMP
                         WHERE id = ?""",
@@ -376,6 +376,7 @@ def execute(input_folder, delete_replay_after_parse, analysis_only):
     #now do analytics
     items_needing_update = get_match_players_needing_update()
     completed_count = 0
+    operations = []
     for match_player in items_needing_update:
         print(f'( {completed_count} / {len(items_needing_update)} )')
         #treat players opener regardless of opponent for this stage
@@ -390,8 +391,14 @@ def execute(input_folder, delete_replay_after_parse, analysis_only):
         #aoe_replay_stats.print_events(player_event_list, None, None, player_strategies)
 
         #now just update match_player
-        update_match_player(player_strategies[0].value, match_player[0])
+
+        operations.append(update_match_player(player_strategies[0].value, match_player[0]))
+        if len(operations) > 100:
+          connect_and_modify_with_list(operations)
+          operations = []
         completed_count += 1
+    if len(operations):
+      connect_and_modify_with_list(operations)
 
 
 if __name__ == '__main__':
