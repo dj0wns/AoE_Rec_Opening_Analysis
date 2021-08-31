@@ -37,9 +37,9 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
         matches = requests.get(
             f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=1000"
         )
-        print(r.url)
-        print(r.status_code)
-        if r.status_code != 200:
+        print(matches.url)
+        print(matches.status_code)
+        if matches.status_code != 200:
             return
     else:
         #get most recent 1000 matching with a 2 hour delay to ensure that the replays had time to get set
@@ -83,7 +83,11 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
             continue
 
         #if file already exists go to next game, dont want to download games we already have
-        replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}({match["leaderboard_id"]}).aoe2record'
+        try:
+          replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}({match["leaderboard_id"]}).aoe2record'
+        except Exception as e:
+          print(match, e)
+          continue
         if os.path.exists(replay_name):
             continue
 
