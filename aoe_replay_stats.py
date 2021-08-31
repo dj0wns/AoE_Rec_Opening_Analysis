@@ -367,6 +367,8 @@ def guess_strategy(players):
                     feudal_event_indexes.append(index)
                 elif event.name == "Castle Age":
                     castle_event_indexes.append(index)
+                    #this is the end of the analysis, nothing more to do
+                    break
 
             index += 1
         #now analyze to find opening
