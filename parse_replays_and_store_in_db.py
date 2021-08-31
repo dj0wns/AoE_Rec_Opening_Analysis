@@ -382,7 +382,10 @@ def execute(input_folder, delete_replay_after_parse, analysis_only):
         #treat players opener regardless of opponent for this stage
         player_event_list = []
         events = []
-        for action in get_actions_for_match_player(match_player[0]):
+        actions = get_actions_for_match_player(match_player[0])
+        if actions is None:
+          continue
+        for action in actions:
             events.append(
                 aoe_replay_stats.Event(aoe_replay_stats.EventType(action[2]),
                                        action[3], None, action[4], action[5]))
