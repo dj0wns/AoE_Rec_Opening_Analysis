@@ -2,7 +2,7 @@ import os
 import json
 import argparse
 
-from parse_replays_and_store_in_db import connect_and_return
+import parse_replays_and_store_in_db
 from aoe_replay_stats import output_time
 
 aoe_data = None
@@ -118,7 +118,7 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids,
         opening1,
         opening2,
     )
-    return connect_and_return(query, args)[0]
+    return parse_replays_and_store_in_db.connect_and_return(query, args)[0]
 
 
 def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids,
@@ -142,7 +142,7 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids,
         opening1,
         opening1,
     )
-    return connect_and_return(query, args)[0]
+    return parse_replays_and_store_in_db.connect_and_return(query, args)[0]
 
 
 #Clamps to included civs!
@@ -177,7 +177,7 @@ def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids,
                                        True, player_ids)
     query += 'ORDER BY a.id;'
     args = (opening1,)
-    return connect_and_return(query, args)
+    return parse_replays_and_store_in_db.connect_and_return(query, args)
 
 
 def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids,
@@ -198,18 +198,18 @@ def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids,
     if no_mirror:
         query += """AND a.civilization != b.civilization"""
     query += ';'
-    return connect_and_return(query, ())[0][0]
+    return parse_replays_and_store_in_db.connect_and_return(query, ())[0][0]
 
 
 def get_strategies():
     query = """SELECT id, name from openings;"""
-    return connect_and_return(query, ())
+    return parse_replays_and_store_in_db.connect_and_return(query, ())
 
 
 def get_civilizations():
     query = """SELECT DISTINCT civilization
              FROM match_players;"""
-    return connect_and_return(query, ())
+    return parse_replays_and_store_in_db.connect_and_return(query, ())
 
 
 def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids,
@@ -235,7 +235,7 @@ def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids,
                                        include_ladder_ids, include_patch_ids,
                                        player_ids is not None, player_ids)
     query += ';'
-    return connect_and_return(query, (civ_id,))[0]
+    return parse_replays_and_store_in_db.connect_and_return(query, (civ_id,))[0]
 
 
 def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
@@ -460,8 +460,14 @@ if __name__ == '__main__':
                         "--no-mirror",
                         help="Remove games where there are mirror matches",
                         action='store_true')
+    parser.add_argument("-d",
+                        "--db-name",
+                        help="Create stats from this db instead",
+                        type=str)
     args = parser.parse_args()
 
+    if args.db_name is not None:
+        parse_replays_and_store_in_db.DB_FILE = args.db_name
     with open(os.path.join('aoe2techtree', 'data', 'data.json')) as json_file:
         aoe_data = json.load(json_file)
     include_civ_ids, clamp_civ_ids, exclude_civ_ids = names_to_ids(

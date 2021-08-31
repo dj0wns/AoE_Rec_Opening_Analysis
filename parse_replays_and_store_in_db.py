@@ -134,15 +134,39 @@ def connect_and_return(statement, args):
         conn.close()
 
 
+def connect_and_modify_with_list(operations):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        for statement, args in operations:
+            c.execute(statement, args)
+        conn.commit()
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+
 def add_player(player_id):
-    connect_and_modify("INSERT OR IGNORE INTO players(id) VALUES(?)",
-                       (player_id,))
+    return ("INSERT OR IGNORE INTO players(id) VALUES(?)", (player_id,))
 
 
-def add_match(match_id, average_elo, map_id, patch_id, ladder_id):
-    connect_and_modify(
-        "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id) VALUES(?,?,?,?,?)",
-        (match_id, average_elo, map_id, patch_id, ladder_id))
+def add_match(match_id, average_elo, map_id, patch_id, ladder_id, time=False):
+    if time:
+        return (
+            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, time) VALUES(?,?,?,?,?,?)",
+            (match_id, average_elo, map_id, patch_id, ladder_id, time))
+    else:
+        return (
+            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id) VALUES(?,?,?,?,?)",
+            (match_id, average_elo, map_id, patch_id, ladder_id))
+
+
+def get_matches():
+    matches = connect_and_return("SELECT * FROM matches", ())
+    if len(matches) == 0:
+        return None
+    return matches
 
 
 def update_match_player(opening_id, match_player_id):
@@ -170,6 +194,24 @@ def match_player_actions_generator(match_player_id, action_list):
                           unique_action.duration)
 
 
+def match_player_actions_generator_from_actions(match_player_actions,
+                                                match_player_id):
+    statement = """INSERT OR IGNORE INTO match_player_actions
+                   (match_player_id, event_type, event_id, time, duration)
+                   VALUES (?,?,?,?,?)"""
+    for id_old, match_player_id_old, event_type, event_id, time, duration in match_player_actions:
+        yield statement, (match_player_id, event_type, event_id, time, duration)
+
+
+def get_match_player_actions(match_player_id):
+    match_player_actions = connect_and_return(
+        "SELECT * FROM match_player_actions WHERE match_player_id = ?",
+        (match_player_id,))
+    if len(match_player_actions) == 0:
+        return None
+    return match_player_actions
+
+
 def add_match_player_actions(match_player_id, action_list):
     generator = match_player_actions_generator(match_player_id, action_list)
     connect_and_modify_with_generator(generator)
@@ -180,6 +222,12 @@ def does_match_exist(match_id):
     if len(match) == 0:
         return False
     return True
+
+
+def get_match_players(match_id):
+    match_players = connect_and_return(
+        "SELECT * FROM match_players WHERE match_id = ?", (match_id,))
+    return match_players
 
 
 def get_match_player_id(player_id, match_id):
@@ -225,11 +273,14 @@ def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
 
     #now plug it into the db!
     #first add players
-    add_player(player1_id)
-    add_player(player2_id)
-    add_match(match_id, average_elo, header.de.selected_map_id,
-              header.save_version, ladder_id)
+    operations = []
+    operations.append(add_player(player1_id))
+    operations.append(add_player(player2_id))
+    operations.append(
+        add_match(match_id, average_elo, header.de.selected_map_id,
+                  header.save_version, ladder_id))
 
+    connect_and_modify_with_list(operations)
     for i in range(len(players)):
         if not players[i]:
             continue
@@ -250,6 +301,59 @@ def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
         player_num += 1
 
     return True
+
+
+def import_from_db(input_db):
+    # Since we are using a global DB handle im going to do some weird hacky stuff to not rewrite routines
+    global DB_FILE
+    print(f'Writing from {input_db} to {DB_FILE}')
+    output_db = DB_FILE
+    DB_FILE = input_db
+    #first get all matches
+    matches = get_matches()
+    #now iterate through matches and add them to other db
+    i = 0
+    for match in matches:
+        print(f'( {i} / {len(matches)} )')
+        i += 1
+        match_id, average_elo, map_id, time, patch_id, ladder_id = match
+
+        #Check if match_id exists in output db
+        DB_FILE = output_db
+        if does_match_exist(match_id):
+            continue
+        DB_FILE = input_db
+        operations = []
+        #now get match players
+        match_players = get_match_players(match_id)
+
+        #Now add players to output db:
+        DB_FILE = output_db
+        for match_player in match_players:
+            player_id = match_player[1]
+            operations.append(add_player(player_id))
+        #add match
+        operations.append(
+            add_match(match_id, average_elo, map_id, patch_id, ladder_id, time))
+        connect_and_modify_with_list(operations)
+        DB_FILE = input_db
+
+        #now get match_player actions
+        for match_player in match_players:
+            match_player_id_old, player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed = match_player
+            match_player_actions = get_match_player_actions(match_player_id_old)
+
+            #now add info to real db
+            DB_FILE = output_db
+            add_unparsed_match_player(player_id, match_id, civilization,
+                                      victory)
+            match_player_id = get_match_player_id(player_id, match_id)
+            generator = match_player_actions_generator_from_actions(
+                match_player_actions, match_player_id)
+            connect_and_modify_with_generator(generator)
+            DB_FILE = input_db
+
+    DB_FILE = output_db
 
 
 def execute(input_folder, delete_replay_after_parse, analysis_only):
@@ -309,6 +413,11 @@ if __name__ == '__main__':
         type=str,
         default=DB_FILE)
     parser.add_argument(
+        "-i",
+        "--import-from-other-db",
+        help="If set, will import all matches from given db into output db",
+        type=str)
+    parser.add_argument(
         "-X",
         "--delete-replay-after-parse",
         help="If set, this will delete replays after they have been parsed",
@@ -318,4 +427,6 @@ if __name__ == '__main__':
     DB_FILE = args.output_db
     init_db()
     update_schema()
+    if args.import_from_other_db is not None:
+        import_from_db(args.import_from_other_db)
     execute(args.input, args.delete_replay_after_parse, args.analysis_only)
