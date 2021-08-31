@@ -213,8 +213,9 @@ def get_civilizations():
 
 
 def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids,
-                           include_civ_ids, clamp_civ_ids, exclude_civ_ids,
-                           include_ladder_ids, include_patch_ids, player_ids):
+                           include_civ_ids, clamp_civ_ids, no_mirror,
+                           exclude_civ_ids, include_ladder_ids,
+                           include_patch_ids, player_ids):
     query = """SELECT
                sum(CASE WHEN a.victory = 1 OR a.victory = 0 THEN 1 ELSE 0 END) as Total,
                sum(CASE WHEN a.victory = 1 THEN 1 ELSE 0 END) as Wins,
@@ -223,7 +224,6 @@ def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids,
              JOIN matches m ON m.id = a.match_id
              join match_players b on a.match_id = b.match_id
              WHERE a.civilization = ?
-             AND a.civilization != b.civilization
              AND (a.victory = 1
              OR a.victory = 0)
              AND a.id != b.id
@@ -231,7 +231,7 @@ def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids,
 
     query += arguments_to_query_string('m', 'a', 'b', minimum_elo, maximum_elo,
                                        map_ids, include_civ_ids, clamp_civ_ids,
-                                       False, exclude_civ_ids,
+                                       no_mirror, exclude_civ_ids,
                                        include_ladder_ids, include_patch_ids,
                                        player_ids is not None, player_ids)
     query += ';'
@@ -247,7 +247,7 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
                                             no_mirror, exclude_civ_ids,
                                             include_ladder_ids,
                                             include_patch_ids, player_ids)
-    print (f'{total_matches} matches in query!\n')
+    print(f'{total_matches} matches in query!\n')
 
     if not total_matches:
         print("No matches found matching the criteria")
@@ -337,14 +337,14 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
 
     total_matches = total_concluded_matches(minimum_elo, maximum_elo, map_ids,
                                             include_civ_ids, clamp_civ_ids,
-                                            True, exclude_civ_ids,
+                                            no_mirror, exclude_civ_ids,
                                             include_ladder_ids,
                                             include_patch_ids, player_ids)
     for i in range(len(civilizations)):
         total, wins, losses = get_civilization_count(
             civilizations[i][0], minimum_elo, maximum_elo, map_ids,
-            include_civ_ids, clamp_civ_ids, exclude_civ_ids, include_ladder_ids,
-            include_patch_ids, player_ids)
+            include_civ_ids, clamp_civ_ids, no_mirror, exclude_civ_ids,
+            include_ladder_ids, include_patch_ids, player_ids)
         if total:
             #divide play rate by 2 because there are 2 civs chosen for every match!
             print(
