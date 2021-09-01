@@ -100,8 +100,13 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
             if r.status_code != 404:
                 #we found a match! Don't find another for this game.
                 #now unzip it
-                replay_zip = zipfile.ZipFile(io.BytesIO(r.content))
-                replay = replay_zip.read(replay_zip.namelist()[0])
+                try:
+                  replay_zip = zipfile.ZipFile(io.BytesIO(r.content))
+                  replay = replay_zip.read(replay_zip.namelist()[0])
+                except Exception as e:
+                  print(e)
+                  continue
+
                 if add_to_db:
                     #Write directly to db!
                     parse_replays_and_store_in_db.parse_replay_file(

@@ -219,7 +219,7 @@ def add_match_player_actions(match_player_id, action_list):
 
 def does_match_exist(match_id):
     match = connect_and_return("SELECT * FROM matches WHERE id=?", (match_id,))
-    if len(match) == 0:
+    if match is None or len(match) == 0:
         return False
     return True
 
