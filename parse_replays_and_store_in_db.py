@@ -61,6 +61,9 @@ def init_db():
                             duration integer NOT NULL,
                             CONSTRAINT fk_match_player_id FOREIGN KEY(match_player_id) REFERENCES match_players(id) ON DELETE CASCADE
                             ); """)
+    sql_commands.append(
+        """CREATE INDEX IF NOT EXISTS idx_match_player_actions_match_player_id
+                           on match_player_actions (match_player_id);""")
     try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
@@ -79,6 +82,14 @@ def update_schema():
         """ALTER TABLE matches ADD COLUMN patch_id float DEFAULT 25.01;""", ())
     connect_and_modify(
         """ALTER TABLE matches ADD COLUMN ladder_id integer DEFAULT 3;""", ())
+
+    # Second update to db, completely renaming the opening flags
+    test = connect_and_return("""SELECT * from openings where id = 5;""", ())
+    if test is not None and len(test) and len(
+            test[0]) and test[0][1] == "PostmillDrushFlush":
+        # Clear table and insert new openings
+        connect_and_modify("""DELETE FROM openings""", ())
+        init_db()  # Cheap way to rebuild table
 
 
 ### UNIVERSAL SQL FUNCTIONS ###
@@ -134,6 +145,21 @@ def connect_and_return(statement, args):
         conn.close()
 
 
+def connect_and_return_with_list(operations):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        return_list = []
+        for statement, args in operations:
+            c.execute(statement, args)
+            return_list.append(c.fetchall())
+        return return_list
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+
 def connect_and_modify_with_list(operations):
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -170,11 +196,10 @@ def get_matches():
 
 
 def update_match_player(opening_id, match_player_id):
-    return(
-        """UPDATE match_players
+    return ("""UPDATE match_players
                         SET opening_id = ?, parser_version = ?, time_parsed = CURRENT_TIMESTAMP
                         WHERE id = ?""",
-        (opening_id, aoe_replay_stats.PARSER_VERSION, match_player_id))
+            (opening_id, aoe_replay_stats.PARSER_VERSION, match_player_id))
 
 
 def add_unparsed_match_player(player_id, match_id, civilization, victory):
@@ -255,6 +280,18 @@ def get_actions_for_match_player(match_player_id):
     if len(match_player_actions) == 0:
         return None
     return match_player_actions
+
+
+def get_actions_for_match_players(match_player_list):
+    operations = []
+    for match_player in match_player_list:
+        operations.append(
+            ("SELECT * FROM match_player_actions WHERE match_player_id = ?",
+             (match_player[0],)))
+    match_players_actions = connect_and_return_with_list(operations)
+    if len(match_players_actions) == 0:
+        return None
+    return match_players_actions
 
 
 def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
@@ -356,6 +393,11 @@ def import_from_db(input_db):
     DB_FILE = output_db
 
 
+def slice_generator(input_list, slice_length):
+    for i in range(0, len(input_list), slice_length):
+        yield input_list[i:i + slice_length]
+
+
 def execute(input_folder, delete_replay_after_parse, analysis_only):
     #import a folder of replays, first add replays to db and then do analysis after
     if not analysis_only:
@@ -376,32 +418,40 @@ def execute(input_folder, delete_replay_after_parse, analysis_only):
     #now do analytics
     items_needing_update = get_match_players_needing_update()
     completed_count = 0
+    slice_size = 25
     operations = []
-    for match_player in items_needing_update:
+    #convert to slices to do operations in bulk
+    for match_players in slice_generator(items_needing_update, slice_size):
         print(f'( {completed_count} / {len(items_needing_update)} )')
         #treat players opener regardless of opponent for this stage
-        player_event_list = []
-        events = []
-        actions = get_actions_for_match_player(match_player[0])
-        if actions is None:
-          continue
-        for action in actions:
-            events.append(
-                aoe_replay_stats.Event(aoe_replay_stats.EventType(action[2]),
-                                       action[3], None, action[4], action[5]))
-        player_event_list.append(events)
-        player_strategies = aoe_replay_stats.guess_strategy(player_event_list)
-        #aoe_replay_stats.print_events(player_event_list, None, None, player_strategies)
+        match_players_actions = get_actions_for_match_players(match_players)
+        index = -1
+        for actions in match_players_actions:
+            player_event_list = []
+            events = []
+            index += 1
+            if actions is None:
+                continue
+            for action in actions:
+                events.append(
+                    aoe_replay_stats.Event(
+                        aoe_replay_stats.EventType(action[2]), action[3], None,
+                        action[4], action[5]))
+            player_event_list.append(events)
+            player_strategies = aoe_replay_stats.guess_strategy(
+                player_event_list)
 
-        #now just update match_player
+            #now just update match_player
 
-        operations.append(update_match_player(player_strategies[0].value, match_player[0]))
+            operations.append(
+                update_match_player(player_strategies[0],
+                                    match_players[index][0]))
         if len(operations) > 100:
-          connect_and_modify_with_list(operations)
-          operations = []
-        completed_count += 1
+            connect_and_modify_with_list(operations)
+            operations = []
+        completed_count += slice_size
     if len(operations):
-      connect_and_modify_with_list(operations)
+        connect_and_modify_with_list(operations)
 
 
 if __name__ == '__main__':

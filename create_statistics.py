@@ -3,7 +3,7 @@ import json
 import argparse
 
 import parse_replays_and_store_in_db
-from aoe_replay_stats import output_time
+from aoe_replay_stats import output_time, OpeningType
 
 aoe_data = None
 
@@ -105,7 +105,7 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids,
              FROM matches m
              JOIN match_players a ON a.match_id = m.id
              JOIN match_players b ON b.match_id = m.id
-             WHERE a.opening_id = ? AND b.opening_id = ?
+             WHERE ((a.opening_id & ?) = ?) AND ((b.opening_id & ?) = ?)
                AND a.id != b.id
                AND """
     query += arguments_to_query_string(
@@ -116,6 +116,8 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids,
     query += ';'
     args = (
         opening1,
+        opening1,
+        opening2,
         opening2,
     )
     return parse_replays_and_store_in_db.connect_and_return(query, args)[0]
@@ -128,7 +130,7 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids,
              FROM matches m
              JOIN match_players a ON a.match_id = m.id
              JOIN match_players b ON b.match_id = m.id
-             WHERE a.opening_id = ? AND b.opening_id = ?
+             WHERE ((a.opening_id & ?) = ?) AND ((b.opening_id & ?) = ?)
                AND a.id != b.id
                AND a.victory = 1
                AND"""
@@ -139,6 +141,8 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids,
         player_ids)
     query += ';'
     args = (
+        opening1,
+        opening1,
         opening1,
         opening1,
     )
@@ -155,7 +159,7 @@ def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids,
              JOIN match_players a ON a.match_id = m.id
              JOIN match_players b ON b.match_id = m.id
              JOIN match_player_actions c ON a.id = c.match_player_id
-             WHERE a.opening_id = ?
+             WHERE ((a.opening_id & ?) = ?)
                AND a.id != b.id
                AND c.event_type = 3
                AND (c.event_id = 101
@@ -176,7 +180,7 @@ def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids,
                                        include_ladder_ids, include_patch_ids,
                                        True, player_ids)
     query += 'ORDER BY a.id;'
-    args = (opening1,)
+    args = (opening1, opening1)
     return parse_replays_and_store_in_db.connect_and_return(query, args)
 
 
@@ -202,7 +206,7 @@ def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids,
 
 
 def get_strategies():
-    query = """SELECT id, name from openings;"""
+    query = """SELECT id, name from openings ORDER BY name;"""
     return parse_replays_and_store_in_db.connect_and_return(query, ())
 
 
@@ -272,7 +276,9 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
                 research_dict[event[1]]["count"] += 1
             else:
                 research_dict[event[1]] = {"time": event[2], "count": 1}
-        string = f'{strategies[i][1]}: '
+        count = sorted(research_dict.items())[0][1][
+            "count"]  #use feudal count for each strategy because its pretty much guaranteed
+        string = f'{strategies[i][1]} ({count}): '
         for k, v in sorted(research_dict.items()):
             if k in translated_names:
                 string += translated_names[k] + ": "
@@ -286,12 +292,31 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
         print(string)
 
     print("\nStrategy Matchups!")
+    Allowed_Strategies = [
+        OpeningType.PremillDrushFC.value, OpeningType.PostmillDrushFC.value,
+        OpeningType.PremillDrushArchers.value,
+        OpeningType.PostmillDrushArchers.value,
+        OpeningType.PremillDrushSkirms.value,
+        OpeningType.PostmillDrushSkirms.value,
+        OpeningType.PremillDrushScouts.value,
+        OpeningType.PostmillDrushScouts.value,
+        OpeningType.PremillDrushMaa.value, OpeningType.PostmillDrushMaa.value,
+        OpeningType.MaaArchers.value, OpeningType.MaaScouts.value,
+        OpeningType.MaaSkirms.value, OpeningType.MaaTowers.value,
+        OpeningType.MaaEagles.value, OpeningType.ScoutsArchers.value,
+        OpeningType.ScoutsSkirms.value
+    ]
+
     for i in range(len(strategies)):
+        if strategies[i][0] not in Allowed_Strategies:
+            continue
         if include_civ_ids or player_ids is not None:
             iteration_range = range(len(strategies))
         else:
             iteration_range = range(i, len(strategies))
         for j in iteration_range:
+            if strategies[j][0] not in Allowed_Strategies:
+                continue
             if i == j:
                 if include_civ_ids or player_ids is not None:
                     total, firstwins, secondwins, unknown = opening_matchups(

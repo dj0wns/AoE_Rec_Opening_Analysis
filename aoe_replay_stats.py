@@ -9,7 +9,7 @@ from construct import Byte
 from collections import OrderedDict
 from enum import Enum
 
-PARSER_VERSION = 2  #fixed fc strategy collision
+PARSER_VERSION = 10  #Move to flags system for better resolution
 aoe_data = None
 
 
@@ -21,24 +21,52 @@ class EventType(Enum):
 
 
 class OpeningType(Enum):
+    # Dark Age
     Unknown = 0
-    PremillDrush = 1
-    PremillDrushFlush = 2
-    PremillDrushFC = 3
-    PostmillDrush = 4
-    PostmillDrushFlush = 5
-    PostmillDrushFC = 6
-    Maa = 16
-    MaaArchers = 7
-    MaaScouts = 8
-    MaaCastle = 9
-    Scouts = 10
-    ScoutsArchers = 11
-    ScoutsSkirmishers = 12
-    StraightArchers = 13
-    StraightArchers1Range = 14
-    StraightArchers2Range = 15
-    FastCastle = 17
+    DidNothing = 0xffffffff
+    PremillDrush = 0x1
+    PostmillDrush = 0x2
+
+    #Feudal Age
+    Maa = 0x100
+    FeudalArcherOpening = 0x200
+    FeudalScoutOpening = 0x400
+    FeudalSkirmOpening = 0x800
+    FeudalArcherFollowup = 0x1000
+    FeudalScoutFollowup = 0x2000
+    FeudalSkirmFollowup = 0x4000
+    FeudalTowers = 0x8000
+    FeudalEagles = 0x10000
+
+    #Castle Age
+    FastCastle = 0x100000
+    CastleCrossbows = 0x200000
+    CastleKnights = 0x400000
+    CastleSiege = 0x800000
+    CastleEliteSkirm = 0x1000000
+    CastlePikemen = 0x2000000
+    CastleEagles = 0x4000000
+    CastleCamels = 0x8000000
+    CastleUU = 0x10000000
+
+    # Meta Types
+    PremillDrushFC = 0x100001
+    PostmillDrushFC = 0x100002
+    PremillDrushArchers = 0x1001
+    PostmillDrushArchers = 0x1002
+    PremillDrushSkirms = 0x4001
+    PostmillDrushSkirms = 0x4002
+    PremillDrushScouts = 0x2001
+    PostmillDrushScouts = 0x2002
+    PremillDrushMaa = 0x101
+    PostmillDrushMaa = 0x102
+    MaaArchers = 0x1100
+    MaaScouts = 0x2100
+    MaaSkirms = 0x4100
+    MaaTowers = 0x8100
+    MaaEagles = 0x10100
+    ScoutsArchers = 0x1400
+    ScoutsSkirms = 0x4400
 
 
 # UNIT IDS #
@@ -58,6 +86,49 @@ UNIT_IDS = {
     "Scout": 448,
     "Eagle": 751,
     "Battering Ram": 1258,
+}
+
+# Unique Unit Ids
+UNIQUE_UNIT_IDS = {
+    "Jaguar Warrior": 725,
+    "Camel Archer": 1007,
+    "Longbowman": 8,
+    "Konnik": 1225,
+    "Coustillier": 1655,
+    "Arambai": 1126,
+    "Cataphract": 40,
+    "Woad Raider": 232,
+    "Chu Ko Nu": 73,
+    "Kipchak": 1231,
+    "Shotel Warrior": 1016,
+    "Throwing Axeman": 281,
+    "Huskarl": 41,
+    "Tarkan": 755,
+    "Kamayuk": 879,
+    "Elephant Archer": 873,
+    "Genoese Crossbowman": 866,
+    "Samurai": 291,
+    "Ballista Elephant": 1120,
+    "War Wagon": 827,
+    "Leitis": 1234,
+    "Huszar": 869,
+    "Karambit Warrior": 1123,
+    "Gbeto": 1013,
+    "Plumed Archer": 763,
+    "Mangudai": 11,
+    "War Elephant": 239,
+    "Organ Gun": 1001,
+    "Mameluke": 282,
+    "Serjeant": 1660,
+    "Boyar": 876,
+    "Conquistador": 771,
+    "Keshik": 1228,
+    "Teutonic Knight": 25,
+    "Janissary": 46,
+    "Rattan Archer": 1129,
+    "Berserk": 692,
+    "Obuch": 1701,
+    "Hussite Wagon": 1704,
 }
 
 #ONLY BUILDINGS WE CARE ABOUT
@@ -150,6 +221,7 @@ TECH_IDS = {
 }
 
 ID_UNITS = {v: k for k, v in UNIT_IDS.items()}
+ID_UNIQUE_UNITS = {v: k for k, v in UNIQUE_UNIT_IDS.items()}
 ID_BUILDINGS = {v: k for k, v in BUILDING_IDS.items()}
 ID_IGNORE = {v: k for k, v in IGNORE_IDS.items()}
 ID_TECHS = {v: k for k, v in TECH_IDS.items()}
@@ -327,101 +399,140 @@ def parse_replay(data):
 def guess_strategy(players):
     player_strategies = []
     for player in players:
-        mill_event_indexes = []
-        militia_event_indexes = []
-        archer_event_indexes = []
-        scout_event_indexes = []
-        skirmisher_event_indexes = []
-        blacksmith_event_indexes = []
-        feudal_event_indexes = []
-        castle_event_indexes = []
-
-        archery_range_event_indexes = []
-        stable_event_indexes = []
-        barracks_event_indexes = []
-
+        openings = 0
         index = 0
+        current_age = 0  # dark = 0, feudal, castle, imp
+        mill_built = False
+        opening_found = False
+        has_archers = False
+        has_scouts = False
+        has_skirms = False
+        barracks_before_mill = False
+
         for event in player:
-            if event.event_type == EventType.BUILDING:
-                if event.name == "Archery Range":
-                    archery_range_event_indexes.append(index)
-                elif event.name == "Stable":
-                    stable_event_indexes.append(index)
-                elif event.name == "Barracks":
-                    barracks_event_indexes.append(index)
-                elif event.name == "Mill":
-                    mill_event_indexes.append(index)
-                elif event.name == "Blacksmith":
-                    barracks_event_indexes.append(index)
+            if event.event_type == EventType.TECH:
+                if event.name == "Feudal Age":
+                    current_age = 1
+                elif event.name == "Castle Age":
+                    current_age = 2
+                    if event.timestamp < 920000:  #15:20 in millis, if clicking now you will land at 18:00
+                        openings |= OpeningType.FastCastle.value
+                elif event.name == "Imperial Age":
+                    #We arent parsing anything in imp
+                    current_age = 3
+                    break
+                elif event.name == "Crossbowman":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleCrossbows.value
+                elif event.name == "Elite Skirmisher":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleEliteSkirm.value
+                elif event.name == "Pikeman":
+                    if current_age == 2:
+                        openings |= OpeningType.CastlePikemen.value
+                elif event.name == "Eagle Warrior":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleEagles.value
+                elif event.name == "Man-at-Arms":
+                    if current_age == 1 and (
+                            openings == 0x1 or openings == 0x2
+                    ):  #specific case where maa is a followup to drush
+                        openings |= OpeningType.Maa.value
+
+            elif event.event_type == EventType.BUILDING:
+                if event.name == "Mill":
+                    mill_built = True
+
+                if event.name == "Barracks":
+                    if mill_built:
+                        barracks_before_mill = False
+                    else:
+                        barracks_before_mill = True
+
+                if event.name == "Tower":
+                    if current_age == 1:
+                        openings |= FeudalTowers.value
+
             elif event.event_type == EventType.UNIT:
                 if event.name == "Militia":
-                    militia_event_indexes.append(index)
+                    if opening_found:
+                        continue
+                    if current_age == 0 and barracks_before_mill:
+                        openings |= OpeningType.PremillDrush.value
+                    elif current_age == 0:
+                        openings |= OpeningType.PostmillDrush.value
+                    elif current_age == 1:
+                        openings |= OpeningType.Maa.value
+                    opening_found = True  # First unit made is the opening, otherwise we dont care about maa i think
+
                 elif event.name == "Archer":
-                    archer_event_indexes.append(index)
+                    # Only count archers once
+                    if has_archers:
+                        continue
+                    has_archers = True
+                    if current_age == 1:
+                        if not opening_found:
+                            openings |= OpeningType.FeudalArcherOpening.value
+                        else:
+                            openings |= OpeningType.FeudalArcherFollowup.value
+                        # Use xbow tech to determine if they did xbow in castle
+                    opening_found = True  # First unit made is the opening, otherwise we dont care about maa i think
+
                 elif event.name == "Scout":
-                    scout_event_indexes.append(index)
+                    # Only count scouts once
+                    if has_scouts:
+                        continue
+                    has_scouts = True
+                    if current_age == 1:
+                        if not opening_found:
+                            openings |= OpeningType.FeudalScoutOpening.value
+                        else:
+                            openings |= OpeningType.FeudalScoutFollowup.value
+                    opening_found = True  # First unit made is the opening, otherwise we dont care about maa i think
+
                 elif event.name == "Skirmisher":
-                    skirmisher_event_indexes.append(index)
-            elif event.event_type == EventType.TECH:
-                if event.name == "Feudal Age":
-                    feudal_event_indexes.append(index)
-                elif event.name == "Castle Age":
-                    castle_event_indexes.append(index)
-                    #this is the end of the analysis, nothing more to do
-                    break
+                    # Only count skirms once
+                    if has_skirms:
+                        continue
+                    has_skirms = True
+                    if current_age == 1:
+                        if not opening_found:
+                            openings |= OpeningType.FeudalSkirmOpening.value
+                        else:
+                            openings |= OpeningType.FeudalSkirmFollowup.value
+                        # Use eskirm tech to determine if they did xbow in castle
+                    opening_found = True  # First unit made is the opening, otherwise we dont care about maa i think
 
-            index += 1
-        #now analyze to find opening
-        strategy = OpeningType.Unknown
-        if not feudal_event_indexes:
-            strategy = OpeningType.Unknown
-        elif barracks_event_indexes and mill_event_indexes and militia_event_indexes and militia_event_indexes[
-                0] < feudal_event_indexes[0]:
-            if barracks_event_indexes[0] < mill_event_indexes[0]:
-                strategy = (OpeningType.PremillDrush)
-            else:
-                strategy = (OpeningType.PostmillDrush)
-        elif scout_event_indexes and archer_event_indexes and not militia_event_indexes:
-            if scout_event_indexes[0] < archer_event_indexes[
-                    0] or stable_event_indexes[0] < archery_range_event_indexes[
-                        0]:
-                strategy = (OpeningType.Scouts)
-            else:
-                strategy = (OpeningType.StraightArchers)
-        elif scout_event_indexes and not archer_event_indexes and militia_event_indexes:
-            if not stable_event_indexes:
-                strategy = OpeningType.Unknown
-            elif scout_event_indexes[0] < militia_event_indexes[
-                    0] or stable_event_indexes[0] < militia_event_indexes[0]:
-                strategy = (OpeningType.Scouts)
-            #test for maa, drush is already accounted for
-            elif militia_event_indexes[0] > feudal_event_indexes[0]:
-                strategy = (OpeningType.Maa)
-        elif not scout_event_indexes and archer_event_indexes and militia_event_indexes:
-            if not archery_range_event_indexes:
-                strategy = OpeningType.Unknown
-            if archer_event_indexes[0] < militia_event_indexes[
-                    0] or archery_range_event_indexes[
-                        0] < militia_event_indexes[0]:
-                strategy = (OpeningType.StraightArchers)
-            #test for maa, drush is already accounted for
-            elif militia_event_indexes[0] > feudal_event_indexes[0]:
-                strategy = (OpeningType.Maa)
-        elif militia_event_indexes and militia_event_indexes[
-                0] > feudal_event_indexes[0]:
-            strategy = (OpeningType.Maa)
-        #if only archers were made
-        elif archer_event_indexes:
-            strategy = (OpeningType.StraightArchers)
-        #if only scouts were made
-        elif scout_event_indexes:
-            strategy = (OpeningType.Scouts)
-        elif castle_event_indexes:
-            strategy = (OpeningType.FastCastle)
-        else:
-            strategy = OpeningType.Unknown
+                elif event.name == "Eagle":
+                    if current_age == 1:
+                        openings |= OpeningType.FeudalEagles.value
+                    opening_found = True
 
-        player_strategies.append(strategy)
+                elif event.name == "Knight":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleKnights.value
+
+                elif event.name == "Camel":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleCamels.value
+
+                elif event.name == "Mangonel":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleSiege.value
+
+                elif event.name == "Scorpion":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleSiege.value
+
+                elif event.name == "Battering Ram":
+                    if current_age == 2:
+                        openings |= OpeningType.CastleSiege.value
+                elif event.id in ID_UNIQUE_UNITS:
+                    if current_age == 2:
+                        openings |= OpeningType.CastleUU.value
+        if not openings:
+            openings = OpeningType.DidNothing.value
+        player_strategies.append(openings)
     return player_strategies
 
 
