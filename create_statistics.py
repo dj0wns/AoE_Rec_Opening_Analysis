@@ -17,6 +17,10 @@ def arguments_to_query_string(match_table_tag, match_playera_table_tag,
     string += f'{match_table_tag}.average_elo > {minimum_elo}\n'
     string += f'  AND {match_table_tag}.average_elo < {maximum_elo}\n'
 
+    # ignore all did nothing results
+    string += f'  AND {match_playera_table_tag}.opening_id != {OpeningType.DidNothing.value}\n'
+    string += f'  AND {match_playerb_table_tag}.opening_id != {OpeningType.DidNothing.value}\n'
+
     if no_mirror:
         string += f'  AND {match_playera_table_tag}.civilization != {match_playerb_table_tag}.civilization\n'
 
@@ -105,7 +109,41 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids,
              FROM matches m
              JOIN match_players a ON a.match_id = m.id
              JOIN match_players b ON b.match_id = m.id
-             WHERE ((a.opening_id & ?) = ?) AND ((b.opening_id & ?) = ?)
+             WHERE ("""
+    #strat 1 inclusions
+    count = 0
+    for i in opening1[1]:
+        count += 1
+        query += f'((a.opening_id & {i}) = {i})'
+        if count < len(opening1[1]):
+            query += ' OR '
+    query += ') AND ('
+    #Strat 1 exclusions
+    count = 0
+    for i in opening1[2]:
+        count += 1
+        query += f'(NOT (a.opening_id & {i}))'
+        if count < len(opening1[2]):
+            query += ' AND '
+    query += ') AND ('
+    #strat 2 inclusions
+    count = 0
+    for i in opening2[1]:
+        count += 1
+        query += f'((b.opening_id & {i}) = {i})'
+        if count < len(opening2[1]):
+            query += ' OR '
+    query += ') AND ('
+    #Strat 2 exclusions
+    count = 0
+    for i in opening2[2]:
+        count += 1
+        query += f'(NOT (b.opening_id & {i}))'
+        if count < len(opening2[2]):
+            query += ' AND '
+
+    query += ')'
+    query += """
                AND a.id != b.id
                AND """
     query += arguments_to_query_string(
@@ -114,13 +152,7 @@ def opening_matchups(opening1, opening2, minimum_elo, maximum_elo, map_ids,
         include_patch_ids, include_civ_ids or player_ids is not None,
         player_ids)
     query += ';'
-    args = (
-        opening1,
-        opening1,
-        opening2,
-        opening2,
-    )
-    return parse_replays_and_store_in_db.connect_and_return(query, args)[0]
+    return parse_replays_and_store_in_db.connect_and_return(query, ())[0]
 
 
 def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids,
@@ -130,23 +162,33 @@ def mirror_matchups(opening1, minimum_elo, maximum_elo, map_ids,
              FROM matches m
              JOIN match_players a ON a.match_id = m.id
              JOIN match_players b ON b.match_id = m.id
-             WHERE ((a.opening_id & ?) = ?) AND ((b.opening_id & ?) = ?)
-               AND a.id != b.id
-               AND a.victory = 1
-               AND"""
+             WHERE ("""
+    #strat 1 inclusions
+    count = 0
+    for i in opening1[1]:
+        count += 1
+        query += f'((a.opening_id & {i}) = {i})'
+        if count < len(opening1[1]):
+            query += ' OR '
+    query += ') AND ('
+    #Strat 1 exclusions
+    count = 0
+    for i in opening1[2]:
+        count += 1
+        query += f'(NOT (a.opening_id & {i}))'
+        if count < len(opening1[2]):
+            query += ' AND '
+    query += ')'
+    query += """  AND a.id != b.id
+                 AND a.victory = 1
+                 AND"""
     query += arguments_to_query_string(
         'm', 'a', 'b', minimum_elo, maximum_elo, map_ids, include_civ_ids,
         clamp_civ_ids, no_mirror, exclude_civ_ids, include_ladder_ids,
         include_patch_ids, include_civ_ids or player_ids is not None,
         player_ids)
     query += ';'
-    args = (
-        opening1,
-        opening1,
-        opening1,
-        opening1,
-    )
-    return parse_replays_and_store_in_db.connect_and_return(query, args)[0]
+    return parse_replays_and_store_in_db.connect_and_return(query, ())[0]
 
 
 #Clamps to included civs!
@@ -159,8 +201,24 @@ def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids,
              JOIN match_players a ON a.match_id = m.id
              JOIN match_players b ON b.match_id = m.id
              JOIN match_player_actions c ON a.id = c.match_player_id
-             WHERE ((a.opening_id & ?) = ?)
-               AND a.id != b.id
+             WHERE ("""
+    #strat 1 inclusions
+    count = 0
+    for i in opening1[1]:
+        count += 1
+        query += f'((a.opening_id & {i}) = {i})'
+        if count < len(opening1[1]):
+            query += ' OR '
+    query += ') AND ('
+    #Strat 1 exclusions
+    count = 0
+    for i in opening1[2]:
+        count += 1
+        query += f'(NOT (a.opening_id & {i}))'
+        if count < len(opening1[2]):
+            query += ' AND '
+    query += ')'
+    query += """AND a.id != b.id
                AND c.event_type = 3
                AND (c.event_id = 101
                  OR c.event_id = 102
@@ -180,8 +238,7 @@ def age_up_times_for_opening(opening1, minimum_elo, maximum_elo, map_ids,
                                        include_ladder_ids, include_patch_ids,
                                        True, player_ids)
     query += 'ORDER BY a.id;'
-    args = (opening1, opening1)
-    return parse_replays_and_store_in_db.connect_and_return(query, args)
+    return parse_replays_and_store_in_db.connect_and_return(query, ())
 
 
 def total_concluded_matches(minimum_elo, maximum_elo, map_ids, include_civ_ids,
@@ -245,13 +302,121 @@ def get_civilization_count(civ_id, minimum_elo, maximum_elo, map_ids,
 def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
             no_mirror, exclude_civ_ids, include_ladder_ids, include_patch_ids,
             player_ids, tech_ids):
-    strategies = get_strategies()
     total_matches = total_concluded_matches(minimum_elo, maximum_elo, map_ids,
                                             include_civ_ids, clamp_civ_ids,
                                             no_mirror, exclude_civ_ids,
                                             include_ladder_ids,
                                             include_patch_ids, player_ids)
     print(f'{total_matches} matches in query!\n')
+
+    allowed_strategies = [
+        #General Openings
+        [
+            "PremillDrush (Any)", [OpeningType.PremillDrush.value],
+            [OpeningType.Unknown.value]
+        ],
+        [
+            "PostmillDrush (Any)", [OpeningType.PostmillDrush.value],
+            [OpeningType.Unknown.value]
+        ],
+        ["MAA (Any)", [OpeningType.Maa.value], [OpeningType.AnyDrush.value]],
+        [
+            "Scouts (Any)", [OpeningType.FeudalScoutOpening.value],
+            [OpeningType.Unknown.value]
+        ],
+        [
+            "Range Opener (Any)",
+            [
+                OpeningType.FeudalArcherOpening.value,
+                OpeningType.FeudalSkirmOpening.value
+            ], [OpeningType.Unknown.value]
+        ],
+        #Specific Openings and followups
+        [
+            "Premill Drush FC", [OpeningType.PremillDrushFC.value],
+            [OpeningType.Unknown.value]
+        ],
+        [
+            "Postmill Drush FC", [OpeningType.PostmillDrushFC.value],
+            [OpeningType.Unknown.value]
+        ],
+        [
+            "Premill Drush Range Followup",
+            [
+                OpeningType.PremillDrushArchers.value,
+                OpeningType.PremillDrushSkirms.value
+            ], [OpeningType.FeudalScoutFollowup.value]
+        ],  #disallow scouts
+        [
+            "Postmill Drush Range Followup",
+            [
+                OpeningType.PostmillDrushArchers.value,
+                OpeningType.PostmillDrushSkirms.value
+            ], [OpeningType.FeudalScoutFollowup.value]
+        ],  #disallow scouts
+        [
+            "Premill Drush Scout Followup",
+            [OpeningType.PremillDrushScouts.value],
+            [
+                OpeningType.FeudalArcherFollowup.value,
+                OpeningType.FeudalSkirmFollowup.value
+            ]
+        ],  #disallow range followup
+        [
+            "Postmill Drush Scout Followup",
+            [OpeningType.PostmillDrushScouts.value],
+            [
+                OpeningType.FeudalArcherFollowup.value,
+                OpeningType.FeudalSkirmFollowup.value
+            ]
+        ],  #disallow range followup
+        [
+            "Scouts (No Feudal Followup)",
+            [OpeningType.FeudalScoutOpening.value],
+            [
+                OpeningType.FeudalArcherFollowup.value,
+                OpeningType.FeudalSkirmFollowup.value
+            ]
+        ],
+        [
+            "Scouts Range Followup",
+            [OpeningType.ScoutsArchers.value, OpeningType.ScoutsSkirms.value],
+            [OpeningType.Unknown.value]
+        ],
+        [
+            "MAA (No Feudal Followup)", [OpeningType.Maa.value],
+            [
+                OpeningType.FeudalArcherFollowup.value,
+                OpeningType.FeudalSkirmFollowup.value,
+                OpeningType.FeudalScoutFollowup.value,
+                OpeningType.FeudalEagles.value
+            ]
+        ],
+        [
+            "MAA Range Followup",
+            [OpeningType.MaaSkirms.value, OpeningType.MaaArchers.value],
+            [
+                OpeningType.FeudalScoutFollowup.value,
+                OpeningType.FeudalEagles.value
+            ]
+        ],
+        [
+            "MAA Scout Followup", [OpeningType.MaaScouts.value],
+            [
+                OpeningType.FeudalArcherFollowup.value,
+                OpeningType.FeudalSkirmFollowup.value,
+                OpeningType.FeudalEagles.value
+            ]
+        ],
+        [
+            "MAA Eagle Followup", [OpeningType.MaaEagles.value],
+            [
+                OpeningType.FeudalArcherFollowup.value,
+                OpeningType.FeudalSkirmFollowup.value,
+                OpeningType.FeudalScoutFollowup.value
+            ]
+        ],
+    ]
 
     if not total_matches:
         print("No matches found matching the criteria")
@@ -261,9 +426,9 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
     print('Uptimes and Selected technologies!')
     #average times through the ages
     translated_names = {101: "Feudal Age", 102: "Castle Age"}
-    for i in range(len(strategies)):
+    for i in range(len(allowed_strategies)):
         age_up_times = age_up_times_for_opening(
-            strategies[i][0], minimum_elo, maximum_elo, map_ids,
+            allowed_strategies[i], minimum_elo, maximum_elo, map_ids,
             include_civ_ids, clamp_civ_ids, no_mirror, exclude_civ_ids,
             include_ladder_ids, include_patch_ids, player_ids, tech_ids)
         if not age_up_times:
@@ -278,7 +443,7 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
                 research_dict[event[1]] = {"time": event[2], "count": 1}
         count = sorted(research_dict.items())[0][1][
             "count"]  #use feudal count for each strategy because its pretty much guaranteed
-        string = f'{strategies[i][1]} ({count}): '
+        string = f'{allowed_strategies[i][0]} ({count}): '
         for k, v in sorted(research_dict.items()):
             if k in translated_names:
                 string += translated_names[k] + ": "
@@ -292,44 +457,22 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
         print(string)
 
     print("\nStrategy Matchups!")
-    Allowed_Strategies = [
-        OpeningType.PremillDrushFC.value, OpeningType.PostmillDrushFC.value,
-        OpeningType.PremillDrushArchers.value,
-        OpeningType.PostmillDrushArchers.value,
-        OpeningType.PremillDrushSkirms.value,
-        OpeningType.PostmillDrushSkirms.value,
-        OpeningType.PremillDrushScouts.value,
-        OpeningType.PostmillDrushScouts.value,
-        OpeningType.PremillDrushMaa.value, OpeningType.PostmillDrushMaa.value,
-        OpeningType.MaaArchers.value, OpeningType.MaaScouts.value,
-        OpeningType.MaaSkirms.value, OpeningType.MaaTowers.value,
-        OpeningType.MaaEagles.value, OpeningType.ScoutsArchers.value,
-        OpeningType.ScoutsSkirms.value
-    ]
 
-    for i in range(len(strategies)):
-        if strategies[i][0] not in Allowed_Strategies:
-            continue
-        if include_civ_ids or player_ids is not None:
-            iteration_range = range(len(strategies))
-        else:
-            iteration_range = range(i, len(strategies))
-        for j in iteration_range:
-            if strategies[j][0] not in Allowed_Strategies:
-                continue
+    for i in range(len(allowed_strategies)):
+        for j in range(len(allowed_strategies)):
             if i == j:
                 if include_civ_ids or player_ids is not None:
                     total, firstwins, secondwins, unknown = opening_matchups(
-                        strategies[i][0], strategies[j][0], minimum_elo,
-                        maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
-                        no_mirror, exclude_civ_ids, include_ladder_ids,
-                        include_patch_ids, player_ids)
+                        allowed_strategies[i], allowed_strategies[j],
+                        minimum_elo, maximum_elo, map_ids, include_civ_ids,
+                        clamp_civ_ids, no_mirror, exclude_civ_ids,
+                        include_ladder_ids, include_patch_ids, player_ids)
                     if total:
                         print(
-                            f'{strategies[i][1]} vs {strategies[j][1]} - {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns'
+                            f'{allowed_strategies[i][0]} vs {allowed_strategies[j][0]} - {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns'
                         )
                 else:
-                    total = mirror_matchups(strategies[i][0], minimum_elo,
+                    total = mirror_matchups(allowed_strategies[i], minimum_elo,
                                             maximum_elo, map_ids,
                                             include_civ_ids, clamp_civ_ids,
                                             no_mirror, exclude_civ_ids,
@@ -337,18 +480,18 @@ def execute(minimum_elo, maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
                                             include_patch_ids, player_ids)[0]
                     if total:
                         print(
-                            f'{strategies[i][1]} vs {strategies[j][1]} - {total} ({total/total_matches:.1%})'
+                            f'{allowed_strategies[i][0]} vs {allowed_strategies[i][0]} - {total} ({total/total_matches:.1%})'
                         )
 
             else:
                 total, firstwins, secondwins, unknown = opening_matchups(
-                    strategies[i][0], strategies[j][0], minimum_elo,
+                    allowed_strategies[i], allowed_strategies[j], minimum_elo,
                     maximum_elo, map_ids, include_civ_ids, clamp_civ_ids,
                     no_mirror, exclude_civ_ids, include_ladder_ids,
                     include_patch_ids, player_ids)
                 if total:
                     print(
-                        f'{strategies[i][1]} vs {strategies[j][1]} - {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns'
+                        f'{allowed_strategies[i][0]} vs {allowed_strategies[j][0]} - {total} ({total/total_matches:.1%}), {firstwins}:{secondwins} ({firstwins/total:.1%}:{secondwins/total:.1%}) with {unknown} unknowns'
                     )
 
     #Go through civilizations
