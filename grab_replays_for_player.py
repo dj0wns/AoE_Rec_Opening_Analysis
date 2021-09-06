@@ -84,28 +84,34 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
 
         #if file already exists go to next game, dont want to download games we already have
         try:
-          replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}({match["leaderboard_id"]}).aoe2record'
+            replay_name = f'{match_id}_{match["players"][0]["profile_id"]}_vs_{match["players"][1]["profile_id"]}-{average_rating}({match["leaderboard_id"]}).aoe2record'
         except Exception as e:
-          print(match, e)
-          continue
+            print(match, e)
+            continue
         if os.path.exists(replay_name):
             continue
 
         for player in match["players"]:
-            r = requests.get(
-                f"https://aoe.ms/replay/?gameId={match_id}&profileId={player['profile_id']}"
-            )
+            try:
+
+                r = requests.get(
+                    f"https://aoe.ms/replay/?gameId={match_id}&profileId={player['profile_id']}"
+                )
+            except Exception as e:
+                print(e)
+                continue
+
             print(r.url)
             print(r.status_code)
             if r.status_code != 404:
                 #we found a match! Don't find another for this game.
                 #now unzip it
                 try:
-                  replay_zip = zipfile.ZipFile(io.BytesIO(r.content))
-                  replay = replay_zip.read(replay_zip.namelist()[0])
+                    replay_zip = zipfile.ZipFile(io.BytesIO(r.content))
+                    replay = replay_zip.read(replay_zip.namelist()[0])
                 except Exception as e:
-                  print(e)
-                  continue
+                    print(e)
+                    continue
 
                 if add_to_db:
                     #Write directly to db!
