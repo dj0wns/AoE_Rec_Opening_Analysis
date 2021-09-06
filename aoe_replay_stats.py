@@ -50,6 +50,7 @@ class OpeningType(Enum):
     CastleUU = 0x10000000
 
     # Meta Types
+    AnyDrush = 0x3
     PremillDrushFC = 0x100001
     PostmillDrushFC = 0x100002
     PremillDrushArchers = 0x1001
@@ -317,6 +318,9 @@ def parse_replay(data):
 
     if type(data) is io.BytesIO:
         eof = len(data.getvalue())
+    elif type(data) is str:
+        data = open(data, 'rb')
+        eof = os.fstat(data.fileno()).st_size
     else:
         eof = os.fstat(data.fileno()).st_size
 
@@ -530,9 +534,10 @@ def guess_strategy(players):
                 elif event.id in ID_UNIQUE_UNITS:
                     if current_age == 2:
                         openings |= OpeningType.CastleUU.value
-        if not openings:
+        if openings == 0:
             openings = OpeningType.DidNothing.value
-        player_strategies.append(openings)
+        if player:
+            player_strategies.append(openings)
     return player_strategies
 
 
@@ -549,7 +554,10 @@ def print_events(players, header, civs, player_strategies):
             print("Player: " +
                   header.de.players[player_num].name.value.decode())
             print("Civ: " + civs[header.de.players[player_num].civ_id])
-        print("Opener: " + str(player_strategies[player_num]))
+        print("Opener: " + hex(player_strategies[player_num]))
+        for opening in OpeningType:
+            if (player_strategies[player_num] & opening.value) == opening.value:
+                print(opening, hex(opening.value))
         player_num += 1
         for unique_actions in player:
             print(unique_actions)
