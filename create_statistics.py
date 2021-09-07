@@ -52,21 +52,21 @@ Allowed_Strategies = [
             OpeningType.PostmillDrushSkirms.value
         ], [OpeningType.FeudalScoutFollowup.value]
     ],  #disallow scouts
-    [
-        "Premill Drush Scout Followup", [OpeningType.PremillDrushScouts.value],
-        [
-            OpeningType.FeudalArcherFollowup.value,
-            OpeningType.FeudalSkirmFollowup.value
-        ]
-    ],  #disallow range followup
-    [
-        "Postmill Drush Scout Followup",
-        [OpeningType.PostmillDrushScouts.value],
-        [
-            OpeningType.FeudalArcherFollowup.value,
-            OpeningType.FeudalSkirmFollowup.value
-        ]
-    ],  #disallow range followup
+    #[
+    #    "Premill Drush Scout Followup", [OpeningType.PremillDrushScouts.value],
+    #    [
+    #        OpeningType.FeudalArcherFollowup.value,
+    #        OpeningType.FeudalSkirmFollowup.value
+    #    ]
+    #],  #disallow range followup
+    #[
+    #    "Postmill Drush Scout Followup",
+    #    [OpeningType.PostmillDrushScouts.value],
+    #    [
+    #        OpeningType.FeudalArcherFollowup.value,
+    #        OpeningType.FeudalSkirmFollowup.value
+    #    ]
+    #],  #disallow range followup
     [
         "Scouts (No Feudal Followup)", [OpeningType.FeudalScoutOpening.value],
         [
@@ -93,22 +93,22 @@ Allowed_Strategies = [
         [OpeningType.MaaSkirms.value, OpeningType.MaaArchers.value],
         [OpeningType.FeudalScoutFollowup.value, OpeningType.FeudalEagles.value]
     ],
-    [
-        "MAA Scout Followup", [OpeningType.MaaScouts.value],
-        [
-            OpeningType.FeudalArcherFollowup.value,
-            OpeningType.FeudalSkirmFollowup.value,
-            OpeningType.FeudalEagles.value
-        ]
-    ],
-    [
-        "MAA Eagle Followup", [OpeningType.MaaEagles.value],
-        [
-            OpeningType.FeudalArcherFollowup.value,
-            OpeningType.FeudalSkirmFollowup.value,
-            OpeningType.FeudalScoutFollowup.value
-        ]
-    ],
+    #[
+    #    "MAA Scout Followup", [OpeningType.MaaScouts.value],
+    #    [
+    #        OpeningType.FeudalArcherFollowup.value,
+    #        OpeningType.FeudalSkirmFollowup.value,
+    #        OpeningType.FeudalEagles.value
+    #    ]
+    #],
+    #[
+    #    "MAA Eagle Followup", [OpeningType.MaaEagles.value],
+    #    [
+    #        OpeningType.FeudalArcherFollowup.value,
+    #        OpeningType.FeudalSkirmFollowup.value,
+    #        OpeningType.FeudalScoutFollowup.value
+    #    ]
+    #],
 ]
 
 
