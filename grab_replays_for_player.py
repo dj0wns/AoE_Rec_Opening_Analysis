@@ -35,7 +35,7 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
     if player_id:
         #specific player
         matches = requests.get(
-            f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=1000"
+            f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=100"  # only grab 100 most recent games, more than that likely wont have replays
         )
         print(matches.url)
         print(matches.status_code)
@@ -60,7 +60,15 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
         if not os.path.exists(path):
             os.mkdir(path)
 
+    invalid_time = round(
+        time.time_ns() / 1000000000
+    ) - 168 * 60 * 60  #anything older than 7 days is probably too old
     for match in matches:
+        if not "finished" in match or match["finished"] is None:
+            continue
+        if match["finished"] < invalid_time:
+            #no more matches worth looking at
+            return
         if not match["ranked"]:
             continue
         #1v1 rm and empire wars only
@@ -153,6 +161,12 @@ if __name__ == '__main__':
         help="Run next query when first query finishes... forever and ever",
         action='store_true')
     parser.add_argument(
+        "-l",
+        "--leaderboard",
+        help="Query the top N on leaderboard and download their recs",
+        type=int,
+        default=0)
+    parser.add_argument(
         "-i",
         "--player-id",
         help=
@@ -165,12 +179,36 @@ if __name__ == '__main__':
     if args.add_to_db:
         parse_replays_and_store_in_db.init_db()
         parse_replays_and_store_in_db.update_schema()
+
+    player_ids = []
+    if args.leaderboard:  #specific player
+        players = requests.get(
+            f"https://aoe2.net/api/leaderboard?game=aoe2de&leaderboard_id=3&start=1&count={args.leaderboard}"
+        )
+        print(players.url)
+        print(players.status_code)
+        if players.status_code != 200:
+            exit(0)
+        players = players.json()
+        for i in players["leaderboard"]:
+            player_ids.append(i["profile_id"])
+
     if args.repeat:
         while True:
-            execute(args.minimum_elo, args.maximum_elo, args.output_folder,
-                    args.player_id, args.add_to_db)
+            if player_ids:
+                for player in player_ids:
+                    execute(args.minimum_elo, args.maximum_elo,
+                            args.output_folder, player, args.add_to_db)
+            else:
+                execute(args.minimum_elo, args.maximum_elo, args.output_folder,
+                        args.player_id, args.add_to_db)
             #sleep 1 minute between requests to avoid ddosing aoe2.net if the api is down
             time.sleep(60)
     else:
-        execute(args.minimum_elo, args.maximum_elo, args.output_folder,
-                args.player_id, args.add_to_db)
+        if player_ids:
+            for player in player_ids:
+                execute(args.minimum_elo, args.maximum_elo, args.output_folder,
+                        player, args.add_to_db)
+        else:
+            execute(args.minimum_elo, args.maximum_elo, args.output_folder,
+                    args.player_id, args.add_to_db)
