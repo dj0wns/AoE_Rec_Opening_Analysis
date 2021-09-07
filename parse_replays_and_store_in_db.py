@@ -64,6 +64,9 @@ def init_db():
     sql_commands.append(
         """CREATE INDEX IF NOT EXISTS idx_match_player_actions_match_player_id
                            on match_player_actions (match_player_id);""")
+
+    sql_commands.append("""CREATE INDEX IF NOT EXISTS idx_match_player_match_id
+                           on match_players (match_id);""")
     try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
@@ -220,11 +223,15 @@ def match_player_actions_generator(match_player_id, action_list):
 
 
 def match_player_actions_generator_from_actions(match_player_actions,
-                                                match_player_id):
+                                                match_player_id,
+                                                minimal_import):
     statement = """INSERT OR IGNORE INTO match_player_actions
                    (match_player_id, event_type, event_id, time, duration)
                    VALUES (?,?,?,?,?)"""
     for id_old, match_player_id_old, event_type, event_id, time, duration in match_player_actions:
+        if minimal_import:
+            if event_type != aoe_replay_stats.EventType.TECH.value:
+                continue
         yield statement, (match_player_id, event_type, event_id, time, duration)
 
 
@@ -340,57 +347,90 @@ def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
     return True
 
 
-def import_from_db(input_db):
+def import_from_db(input_db, minimal_import):
     # Since we are using a global DB handle im going to do some weird hacky stuff to not rewrite routines
     global DB_FILE
-    print(f'Writing from {input_db} to {DB_FILE}')
-    output_db = DB_FILE
-    DB_FILE = input_db
+    if minimal_import:
+        print(f'Writing minimal_import from {input_db} to {DB_FILE}')
+    else:
+        print(f'Writing from {input_db} to {DB_FILE}')
+
+    output_conn = sqlite3.connect(DB_FILE)
+    output_cursor = output_conn.cursor()
+    input_conn = sqlite3.connect(input_db)
+    input_cursor = input_conn.cursor()
+
     #first get all matches
-    matches = get_matches()
+    input_cursor.execute(
+        """SELECT m.id, m.average_elo, m.map_id, m.time, m.patch_id, m.ladder_id from matches m
+                            JOIN match_players a on a.match_id = m.id
+                            JOIN match_players b on b.match_id = m.id
+                            WHERE a.id != b.id
+                              AND a.parser_version == ? 
+                              AND b.parser_version == ?
+                              AND a.victory = 1""",
+        (aoe_replay_stats.PARSER_VERSION, aoe_replay_stats.PARSER_VERSION))
+    matches = input_cursor.fetchall()
+
     #now iterate through matches and add them to other db
     i = 0
     for match in matches:
-        print(f'( {i} / {len(matches)} )')
+        if i % 50 == 0:  #throttle for speed reasons
+            print(f'( {i} / {len(matches)} )')
         i += 1
         match_id, average_elo, map_id, time, patch_id, ladder_id = match
 
         #Check if match_id exists in output db
-        DB_FILE = output_db
-        if does_match_exist(match_id):
+        output_cursor.execute("SELECT * FROM matches WHERE id=?", (match_id,))
+        match = output_cursor.fetchall()
+        if not match is None and len(match):
             continue
-        DB_FILE = input_db
-        operations = []
+
         #now get match players
-        match_players = get_match_players(match_id)
+        input_cursor.execute("SELECT * FROM match_players WHERE match_id = ?",
+                             (match_id,))
+        match_players = input_cursor.fetchall()
 
         #Now add players to output db:
-        DB_FILE = output_db
         for match_player in match_players:
             player_id = match_player[1]
-            operations.append(add_player(player_id))
+            output_cursor.execute("INSERT OR IGNORE INTO players(id) VALUES(?)",
+                                  (player_id,))
+
         #add match
-        operations.append(
-            add_match(match_id, average_elo, map_id, patch_id, ladder_id, time))
-        connect_and_modify_with_list(operations)
-        DB_FILE = input_db
+        output_cursor.execute(
+            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, time) VALUES(?,?,?,?,?,?)",
+            (match_id, average_elo, map_id, patch_id, ladder_id, time))
 
         #now get match_player actions
         for match_player in match_players:
             match_player_id_old, player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed = match_player
-            match_player_actions = get_match_player_actions(match_player_id_old)
+            input_cursor.execute(
+                "SELECT * FROM match_player_actions WHERE match_player_id = ?",
+                (match_player_id_old,))
+            match_player_actions = input_cursor.fetchall()
 
             #now add info to real db
-            DB_FILE = output_db
-            add_unparsed_match_player(player_id, match_id, civilization,
-                                      victory)
-            match_player_id = get_match_player_id(player_id, match_id)
-            generator = match_player_actions_generator_from_actions(
-                match_player_actions, match_player_id)
-            connect_and_modify_with_generator(generator)
-            DB_FILE = input_db
+            if minimal_import:
+                output_cursor.execute(
+                    """INSERT OR IGNORE INTO match_players(player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed) VALUES
+                                      (?,?,?,?,?,?,?)""",
+                    (player_id, match_id, opening_id, civilization, victory,
+                     parser_version, time_parsed))
+            else:
+                output_cursor.execute(
+                    """INSERT OR IGNORE INTO match_players(player_id, match_id, civilization, victory) VALUES
+                                      (?,?,?,?)""",
+                    (player_id, match_id, civilization, victory))
 
-    DB_FILE = output_db
+            match_player_id = output_cursor.lastrowid
+
+            for statement, args in match_player_actions_generator_from_actions(
+                    match_player_actions, match_player_id, minimal_import):
+                output_cursor.execute(statement, args)
+    output_conn.commit()
+    output_conn.close()
+    input_conn.close()
 
 
 def slice_generator(input_list, slice_length):
@@ -478,6 +518,11 @@ if __name__ == '__main__':
         help="If set, will import all matches from given db into output db",
         type=str)
     parser.add_argument(
+        "-m",
+        "--minimal-import-from-other-db",
+        help="If set, will import minimal data from given db into output db",
+        type=str)
+    parser.add_argument(
         "-X",
         "--delete-replay-after-parse",
         help="If set, this will delete replays after they have been parsed",
@@ -487,6 +532,12 @@ if __name__ == '__main__':
     DB_FILE = args.output_db
     init_db()
     update_schema()
+
+    if args.minimal_import_from_other_db is not None:
+        args.import_from_other_db = args.minimal_import_from_other_db
+        minimal_import = True
+    else:
+        minimal_import = False
     if args.import_from_other_db is not None:
-        import_from_db(args.import_from_other_db)
+        import_from_db(args.import_from_other_db, minimal_import)
     execute(args.input, args.delete_replay_after_parse, args.analysis_only)
