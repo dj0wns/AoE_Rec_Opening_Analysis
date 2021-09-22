@@ -43,14 +43,17 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
             return
     else:
         #get most recent 1000 matching with a 2 hour delay to ensure that the replays had time to get set
-        search_time = round(time.time_ns() / 1000000000) - 2 * 60 * 60
-
-        matches = requests.get(
-            f"https://aoe2.net/api/matches?game=aoe2de&count=1000&since={search_time}"
-        )
-        print(matches.url)
-        print(matches.status_code)
-        if matches.status_code != 200:
+        try:
+            search_time = round(time.time_ns() / 1000000000) - 2 * 60 * 60
+            matches = requests.get(
+                f"https://aoe2.net/api/matches?game=aoe2de&count=1000&since={search_time}"
+            )
+            print(matches.url)
+            print(matches.status_code)
+            if matches.status_code != 200:
+                return
+        except Exception as e:
+            print(e)
             return
 
     matches = matches.json()
@@ -126,7 +129,7 @@ def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
                     parse_replays_and_store_in_db.parse_replay_file(
                         match_id, match["players"][0]["profile_id"],
                         match["players"][1]["profile_id"], average_rating,
-                        match["leaderboard_id"], io.BytesIO(replay))
+                        match["leaderboard_id"], io.BytesIO(replay), match["version"])
                 else:
                     with open(os.path.join(path, replay_name), 'wb') as f:
                         f.write(replay)

@@ -30,7 +30,8 @@ def init_db():
                             map_id integer NOT NULL,
                             time datetime DEFAULT CURRENT_TIMESTAMP,
                             patch_id float DEFAULT 25.01,
-                            ladder_id integer DEFAULT 3
+                            ladder_id integer DEFAULT 3,
+                            patch_number integer DEFAULT 53347
                             ) WITHOUT ROWID; """)
 
     sql_commands.append(""" CREATE TABLE IF NOT EXISTS players (
@@ -79,6 +80,130 @@ def init_db():
         conn.close()
 
 
+def init_flat_db():
+    sql_commands = []
+    sql_commands.append("PRAGMA foreign_keys = ON;")
+    sql_commands.append(""" CREATE TABLE IF NOT EXISTS openings (
+                            id integer NOT NULL PRIMARY KEY,
+                            name text NOT NULL
+                            ) WITHOUT ROWID; """)
+
+    for opening in aoe_replay_stats.OpeningType:
+        sql_commands.append(
+            f'INSERT OR IGNORE INTO openings (id, name) VALUES({opening.value}, "{opening.name}")'
+        )
+
+    sql_commands.append(""" CREATE TABLE IF NOT EXISTS matches (
+                            id integer NOT NULL PRIMARY KEY,
+                            average_elo integer NOT NULL,
+                            map_id integer NOT NULL,
+                            time datetime DEFAULT CURRENT_TIMESTAMP,
+                            patch_id float DEFAULT 25.01,
+                            ladder_id integer DEFAULT 3,
+                            patch_number integer NOT NULL,
+                            player1_id integer NOT NULL,
+                            player1_opening_flag0 bool NOT NULL,
+                            player1_opening_flag1 bool NOT NULL,
+                            player1_opening_flag2 bool NOT NULL,
+                            player1_opening_flag3 bool NOT NULL,
+                            player1_opening_flag4 bool NOT NULL,
+                            player1_opening_flag5 bool NOT NULL,
+                            player1_opening_flag6 bool NOT NULL,
+                            player1_opening_flag7 bool NOT NULL,
+                            player1_opening_flag8 bool NOT NULL,
+                            player1_opening_flag9 bool NOT NULL,
+                            player1_opening_flag10 bool NOT NULL,
+                            player1_opening_flag11 bool NOT NULL,
+                            player1_opening_flag12 bool NOT NULL,
+                            player1_opening_flag13 bool NOT NULL,
+                            player1_opening_flag14 bool NOT NULL,
+                            player1_opening_flag15 bool NOT NULL,
+                            player1_opening_flag16 bool NOT NULL,
+                            player1_opening_flag17 bool NOT NULL,
+                            player1_opening_flag18 bool NOT NULL,
+                            player1_opening_flag19 bool NOT NULL,
+                            player1_opening_flag20 bool NOT NULL,
+                            player1_opening_flag21 bool NOT NULL,
+                            player1_opening_flag22 bool NOT NULL,
+                            player1_opening_flag23 bool NOT NULL,
+                            player1_opening_flag24 bool NOT NULL,
+                            player1_opening_flag25 bool NOT NULL,
+                            player1_opening_flag26 bool NOT NULL,
+                            player1_opening_flag27 bool NOT NULL,
+                            player1_opening_flag28 bool NOT NULL,
+                            player1_opening_flag29 bool NOT NULL,
+                            player1_opening_flag30 bool NOT NULL,
+                            player1_opening_flag31 bool NOT NULL,
+                            player1_civilization integer NOT NULL,
+                            player1_victory integer NOT NULL,
+                            player1_parser_version integer NOT NULL,
+                            player2_id integer NOT NULL,
+                            player2_opening_flag0 bool NOT NULL,
+                            player2_opening_flag1 bool NOT NULL,
+                            player2_opening_flag2 bool NOT NULL,
+                            player2_opening_flag3 bool NOT NULL,
+                            player2_opening_flag4 bool NOT NULL,
+                            player2_opening_flag5 bool NOT NULL,
+                            player2_opening_flag6 bool NOT NULL,
+                            player2_opening_flag7 bool NOT NULL,
+                            player2_opening_flag8 bool NOT NULL,
+                            player2_opening_flag9 bool NOT NULL,
+                            player2_opening_flag10 bool NOT NULL,
+                            player2_opening_flag11 bool NOT NULL,
+                            player2_opening_flag12 bool NOT NULL,
+                            player2_opening_flag13 bool NOT NULL,
+                            player2_opening_flag14 bool NOT NULL,
+                            player2_opening_flag15 bool NOT NULL,
+                            player2_opening_flag16 bool NOT NULL,
+                            player2_opening_flag17 bool NOT NULL,
+                            player2_opening_flag18 bool NOT NULL,
+                            player2_opening_flag19 bool NOT NULL,
+                            player2_opening_flag20 bool NOT NULL,
+                            player2_opening_flag21 bool NOT NULL,
+                            player2_opening_flag22 bool NOT NULL,
+                            player2_opening_flag23 bool NOT NULL,
+                            player2_opening_flag24 bool NOT NULL,
+                            player2_opening_flag25 bool NOT NULL,
+                            player2_opening_flag26 bool NOT NULL,
+                            player2_opening_flag27 bool NOT NULL,
+                            player2_opening_flag28 bool NOT NULL,
+                            player2_opening_flag29 bool NOT NULL,
+                            player2_opening_flag30 bool NOT NULL,
+                            player2_opening_flag31 bool NOT NULL,
+                            player2_civilization integer NOT NULL,
+                            player2_victory integer NOT NULL,
+                            player2_parser_version integer NOT NULL,
+                            CONSTRAINT fk_player FOREIGN KEY(player1_id) REFERENCES players(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_player FOREIGN KEY(player2_id) REFERENCES players(id) ON DELETE CASCADE
+                            ) WITHOUT ROWID; """)
+
+    sql_commands.append(""" CREATE TABLE IF NOT EXISTS players (
+                            id integer NOT NULL PRIMARY KEY,
+                            name text
+                            ) WITHOUT ROWID; """)
+
+    sql_commands.append(""" CREATE TABLE IF NOT EXISTS match_player_actions (
+                            id integer NOT NULL PRIMARY KEY,
+                            match_id integer NOT NULL,
+                            player_id integer NOT NULL,
+                            event_type integer NOT NULL,
+                            event_id integer NOT NULL,
+                            time integer NOT NULL,
+                            duration integer NOT NULL,
+                            CONSTRAINT fk_match_id FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_player_id FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+                            ); """)
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        for sql_command in sql_commands:
+            c.execute(sql_command)
+        conn.commit()
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
 def update_schema():
     # First update to db, adding patch number and ladder id to matches
     connect_and_modify(
@@ -93,6 +218,10 @@ def update_schema():
         # Clear table and insert new openings
         connect_and_modify("""DELETE FROM openings""", ())
         init_db()  # Cheap way to rebuild table
+    
+    #third update add patch id
+    connect_and_modify(
+        """ALTER TABLE matches ADD COLUMN patch_number integer DEFAULT 53347;""", ())
 
 
 ### UNIVERSAL SQL FUNCTIONS ###
@@ -180,15 +309,15 @@ def add_player(player_id):
     return ("INSERT OR IGNORE INTO players(id) VALUES(?)", (player_id,))
 
 
-def add_match(match_id, average_elo, map_id, patch_id, ladder_id, time=False):
+def add_match(match_id, average_elo, map_id, patch_id, ladder_id, patch_number, time=False):
     if time:
         return (
-            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, time) VALUES(?,?,?,?,?,?)",
-            (match_id, average_elo, map_id, patch_id, ladder_id, time))
+            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, time, patch_number) VALUES(?,?,?,?,?,?,?)",
+            (match_id, average_elo, map_id, patch_id, ladder_id, time, patch_number))
     else:
         return (
-            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id) VALUES(?,?,?,?,?)",
-            (match_id, average_elo, map_id, patch_id, ladder_id))
+            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, patch_number) VALUES(?,?,?,?,?,?)",
+            (match_id, average_elo, map_id, patch_id, ladder_id, patch_number))
 
 
 def get_matches():
@@ -221,6 +350,17 @@ def match_player_actions_generator(match_player_id, action_list):
                           unique_action.id, unique_action.timestamp,
                           unique_action.duration)
 
+
+def flat_match_player_actions_generator_from_actions(match_player_actions,
+                                                match_id,
+                                                player_id):
+    statement = """INSERT OR IGNORE INTO match_player_actions
+                   (match_id, player_id, event_type, event_id, time, duration)
+                   VALUES (?,?,?,?,?,?)"""
+    for id_old, match_player_id_old, event_type, event_id, time, duration in match_player_actions:
+        if event_type != aoe_replay_stats.EventType.TECH.value:
+            continue
+        yield statement, (match_id, player_id, event_type, event_id, time, duration)
 
 def match_player_actions_generator_from_actions(match_player_actions,
                                                 match_player_id,
@@ -302,7 +442,7 @@ def get_actions_for_match_players(match_player_list):
 
 
 def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
-                      file_data):
+                      file_data, patch_number):
     #match already in db!
     if does_match_exist(match_id):
         return False
@@ -322,7 +462,7 @@ def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
     operations.append(add_player(player2_id))
     operations.append(
         add_match(match_id, average_elo, header.de.selected_map_id,
-                  header.save_version, ladder_id))
+                  header.save_version, ladder_id, patch_number))
 
     connect_and_modify_with_list(operations)
     for i in range(len(players)):
@@ -347,11 +487,13 @@ def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
     return True
 
 
-def import_from_db(input_db, minimal_import):
+def import_from_db(input_db, minimal_import, flat_import):
     # Since we are using a global DB handle im going to do some weird hacky stuff to not rewrite routines
     global DB_FILE
     if minimal_import:
         print(f'Writing minimal_import from {input_db} to {DB_FILE}')
+    elif flat_import:
+        print(f'Writing flat_import from {input_db} to {DB_FILE}')
     else:
         print(f'Writing from {input_db} to {DB_FILE}')
 
@@ -362,7 +504,7 @@ def import_from_db(input_db, minimal_import):
 
     #first get all matches
     input_cursor.execute(
-        """SELECT m.id, m.average_elo, m.map_id, m.time, m.patch_id, m.ladder_id from matches m
+        """SELECT m.id, m.average_elo, m.map_id, m.time, m.patch_id, m.ladder_id, m.patch_number from matches m
                             JOIN match_players a on a.match_id = m.id
                             JOIN match_players b on b.match_id = m.id
                             WHERE a.id != b.id
@@ -378,7 +520,11 @@ def import_from_db(input_db, minimal_import):
         if i % 50 == 0:  #throttle for speed reasons
             print(f'( {i} / {len(matches)} )')
         i += 1
-        match_id, average_elo, map_id, time, patch_id, ladder_id = match
+        match_id, average_elo, map_id, time, patch_id, ladder_id, patch_number = match
+        
+        #Set patch to invalid if its unavailable
+        if patch_number is None:
+          patch_number = -1
 
         #Check if match_id exists in output db
         output_cursor.execute("SELECT * FROM matches WHERE id=?", (match_id,))
@@ -396,38 +542,93 @@ def import_from_db(input_db, minimal_import):
             player_id = match_player[1]
             output_cursor.execute("INSERT OR IGNORE INTO players(id) VALUES(?)",
                                   (player_id,))
+        if flat_import:
+            if len(match_players) != 2:
+                print(f'Match ({match_id}): only has {len(match_players)} player(s)')
+                return
+            statement = "INSERT INTO matches(id, average_elo, map_id, patch_id, ladder_id, time, patch_number,"
+            for j in range(1,len(match_players)+1):
+              statement += f' player{j}_id,'
+              for k in range(32) : #number of flags
+                statement += f' player{j}_opening_flag{k},'
+              statement += f' player{j}_civilization,'
+              statement += f' player{j}_victory,'
+              statement += f' player{j}_parser_version,'
+            statement = statement[:-1] #remove trailing comma
+            statement += ") "
+            statement +="VALUES(?,?,?,?,?,?,?,"
+            for j in range(1,len(match_players)+1):
+              statement += f'?,'
+              for k in range(32) : #number of flags
+                statement += f'?,'
+              statement += f'?,'
+              statement += f'?,'
+              statement += f'?,'
+            statement = statement[:-1] #remove trailing comma
+            statement+= ");"
 
-        #add match
-        output_cursor.execute(
-            "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, time) VALUES(?,?,?,?,?,?)",
-            (match_id, average_elo, map_id, patch_id, ladder_id, time))
+            #now generate tuple
+            arguments = []
+            arguments.append(match_id)
+            arguments.append(average_elo)
+            arguments.append(map_id)
+            arguments.append(patch_id)
+            arguments.append(ladder_id)
+            arguments.append(time)
+            arguments.append(patch_number)
+            for j in range(len(match_players)):
+              arguments.append(match_players[j][1])
+              for k in range(32) : #number of flags
+                arguments.append((match_players[j][3] & 2**k) != 0)
+              arguments.append(match_players[j][4])
+              arguments.append(match_players[j][5])
+              arguments.append(match_players[j][6])
 
-        #now get match_player actions
-        for match_player in match_players:
-            match_player_id_old, player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed = match_player
-            input_cursor.execute(
-                "SELECT * FROM match_player_actions WHERE match_player_id = ?",
-                (match_player_id_old,))
-            match_player_actions = input_cursor.fetchall()
+            output_cursor.execute(statement, tuple(arguments))
 
-            #now add info to real db
-            if minimal_import:
-                output_cursor.execute(
-                    """INSERT OR IGNORE INTO match_players(player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed) VALUES
-                                      (?,?,?,?,?,?,?)""",
-                    (player_id, match_id, opening_id, civilization, victory,
-                     parser_version, time_parsed))
-            else:
-                output_cursor.execute(
-                    """INSERT OR IGNORE INTO match_players(player_id, match_id, civilization, victory) VALUES
-                                      (?,?,?,?)""",
-                    (player_id, match_id, civilization, victory))
+            #now do match player actions
+            for match_player in match_players:
+              match_player_id_old, player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed = match_player
+              input_cursor.execute(
+                  "SELECT * FROM match_player_actions WHERE match_player_id = ?",
+                  (match_player_id_old,))
+              match_player_actions = input_cursor.fetchall()
+              for statement, args in flat_match_player_actions_generator_from_actions(
+                      match_player_actions, match_id, player_id):
+                  output_cursor.execute(statement, args)
+            
+        else:
+            #add match
+            output_cursor.execute(
+                "INSERT OR IGNORE INTO matches(id, average_elo, map_id, patch_id, ladder_id, time, patch_number) VALUES(?,?,?,?,?,?,?)",
+                (match_id, average_elo, map_id, patch_id, ladder_id, time, patch_number))
 
-            match_player_id = output_cursor.lastrowid
+            #now get match_player actions
+            for match_player in match_players:
+                match_player_id_old, player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed = match_player
+                input_cursor.execute(
+                    "SELECT * FROM match_player_actions WHERE match_player_id = ?",
+                    (match_player_id_old,))
+                match_player_actions = input_cursor.fetchall()
 
-            for statement, args in match_player_actions_generator_from_actions(
-                    match_player_actions, match_player_id, minimal_import):
-                output_cursor.execute(statement, args)
+                #now add info to real db
+                if minimal_import:
+                    output_cursor.execute(
+                        """INSERT OR IGNORE INTO match_players(player_id, match_id, opening_id, civilization, victory, parser_version, time_parsed) VALUES
+                                          (?,?,?,?,?,?,?)""",
+                        (player_id, match_id, opening_id, civilization, victory,
+                         parser_version, time_parsed))
+                else:
+                    output_cursor.execute(
+                        """INSERT OR IGNORE INTO match_players(player_id, match_id, civilization, victory) VALUES
+                                          (?,?,?,?)""",
+                        (player_id, match_id, civilization, victory))
+
+                match_player_id = output_cursor.lastrowid
+
+                for statement, args in match_player_actions_generator_from_actions(
+                        match_player_actions, match_player_id, minimal_import):
+                    output_cursor.execute(statement, args)
     output_conn.commit()
     output_conn.close()
     input_conn.close()
@@ -482,7 +683,8 @@ def execute(input_folder, delete_replay_after_parse, analysis_only):
                 player_event_list)
 
             #now just update match_player
-
+            if not player_strategies:
+              continue
             operations.append(
                 update_match_player(player_strategies[0],
                                     match_players[index][0]))
@@ -523,6 +725,11 @@ if __name__ == '__main__':
         help="If set, will import minimal data from given db into output db",
         type=str)
     parser.add_argument(
+        "-f",
+        "--flat-import-from-other-db",
+        help="If set, will import minimal data from given db into output flat db",
+        type=str)
+    parser.add_argument(
         "-X",
         "--delete-replay-after-parse",
         help="If set, this will delete replays after they have been parsed",
@@ -530,14 +737,20 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     DB_FILE = args.output_db
-    init_db()
-    update_schema()
-
+    minimal_import = False
+    flat_import = False
     if args.minimal_import_from_other_db is not None:
         args.import_from_other_db = args.minimal_import_from_other_db
         minimal_import = True
+    elif args.flat_import_from_other_db is not None:
+        args.import_from_other_db = args.flat_import_from_other_db
+        flat_import = True
+    if flat_import:
+      init_flat_db()
     else:
-        minimal_import = False
+      init_db()
+      update_schema()
+      
     if args.import_from_other_db is not None:
-        import_from_db(args.import_from_other_db, minimal_import)
+        import_from_db(args.import_from_other_db, minimal_import, flat_import)
     execute(args.input, args.delete_replay_after_parse, args.analysis_only)
