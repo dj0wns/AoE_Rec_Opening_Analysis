@@ -34,12 +34,16 @@ def parse_filename(fname):
 def execute(minimum_elo, maximum_elo, output_folder, player_id, add_to_db):
     if player_id:
         #specific player
-        matches = requests.get(
-            f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=100"  # only grab 100 most recent games, more than that likely wont have replays
-        )
-        print(matches.url)
-        print(matches.status_code)
-        if matches.status_code != 200:
+        try:
+          matches = requests.get(
+              f"https://aoe2.net/api/player/matches?game=aoe2de&profile_id={player_id}&count=100"  # only grab 100 most recent games, more than that likely wont have replays
+          )
+          print(matches.url)
+          print(matches.status_code)
+          if matches.status_code != 200:
+              return
+        except Exception as e:
+            print(e)
             return
     else:
         #get most recent 1000 matching with a 2 hour delay to ensure that the replays had time to get set

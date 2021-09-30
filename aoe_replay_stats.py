@@ -24,6 +24,7 @@ class OpeningType(Enum):
     # Dark Age
     Unknown = 0
     DidNothing = 0xffffffff
+    Unused = 0x80000000 #used to quickly test the did nothing flag
     PremillDrush = 0x1
     PostmillDrush = 0x2
 

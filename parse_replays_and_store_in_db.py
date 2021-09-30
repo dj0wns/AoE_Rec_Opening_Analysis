@@ -406,7 +406,7 @@ def get_match_player_id(player_id, match_id):
     match_player_id = connect_and_return(
         "SELECT id FROM match_players WHERE player_id = ? AND match_id = ?",
         (player_id, match_id))
-    if len(match_player_id) == 0:
+    if match_player_id is None or len(match_player_id) == 0:
         return None
     return match_player_id[0][0]
 
