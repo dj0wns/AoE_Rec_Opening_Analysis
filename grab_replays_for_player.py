@@ -206,6 +206,8 @@ if __name__ == '__main__':
                 for player in player_ids:
                     execute(args.minimum_elo, args.maximum_elo,
                             args.output_folder, player, args.add_to_db)
+                    # Add throttle to avoid timeouts
+                    time.sleep(30)
             else:
                 execute(args.minimum_elo, args.maximum_elo, args.output_folder,
                         args.player_id, args.add_to_db)

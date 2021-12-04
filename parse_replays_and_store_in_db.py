@@ -218,10 +218,12 @@ def update_schema():
         # Clear table and insert new openings
         connect_and_modify("""DELETE FROM openings""", ())
         init_db()  # Cheap way to rebuild table
-    
     #third update add patch id
     connect_and_modify(
         """ALTER TABLE matches ADD COLUMN patch_number integer DEFAULT 53347;""", ())
+    #fourth update, try a time index
+    connect_and_modify(
+        """CREATE INDEX time_index ON matches(time)""", ())
 
 
 ### UNIVERSAL SQL FUNCTIONS ###
@@ -412,8 +414,9 @@ def get_match_player_id(player_id, match_id):
 
 
 def get_match_players_needing_update():
+    #Added small thing to ignore first 1m matches when searching, remove this if you need a whole db update
     match_players = connect_and_return(
-        "SELECT * FROM match_players WHERE parser_version < ?",
+        "SELECT * FROM match_players WHERE parser_version < ? AND match_id > 129934042",
         (aoe_replay_stats.PARSER_VERSION,))
     if len(match_players) == 0:
         return None
@@ -521,7 +524,6 @@ def import_from_db(input_db, minimal_import, flat_import):
             print(f'( {i} / {len(matches)} )')
         i += 1
         match_id, average_elo, map_id, time, patch_id, ladder_id, patch_number = match
-        
         #Set patch to invalid if its unavailable
         if patch_number is None:
           patch_number = -1
@@ -596,7 +598,6 @@ def import_from_db(input_db, minimal_import, flat_import):
               for statement, args in flat_match_player_actions_generator_from_actions(
                       match_player_actions, match_id, player_id):
                   output_cursor.execute(statement, args)
-            
         else:
             #add match
             output_cursor.execute(
