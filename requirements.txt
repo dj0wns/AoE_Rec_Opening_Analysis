@@ -1,0 +1,5 @@
+construct==2.8.16
+mgz==1.7.5
+python-dotenv==0.20.0
+requests==2.27.1
+setuptools==62.1.0

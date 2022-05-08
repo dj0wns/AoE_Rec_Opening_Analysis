@@ -11,6 +11,8 @@ from enum import Enum
 
 PARSER_VERSION = 10  #Move to flags system for better resolution
 
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+
 
 class EventType(Enum):
     UNIT = 1
@@ -228,7 +230,7 @@ ID_IGNORE = {v: k for k, v in IGNORE_IDS.items()}
 ID_TECHS = {v: k for k, v in TECH_IDS.items()}
 
 
-with open(os.path.join('aoe2techtree', 'data', 'data.json')) as json_file:
+with open(os.path.join(SCRIPT_DIR, 'aoe2techtree', 'data', 'data.json')) as json_file:
     AOE_DATA = json.load(json_file)
 
 

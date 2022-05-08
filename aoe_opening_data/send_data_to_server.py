@@ -4,6 +4,7 @@ import requests
 import sqlite3
 import time
 import re
+from datetime import datetime;
 
 from dotenv import load_dotenv
 
@@ -14,8 +15,13 @@ load_dotenv()
 
 API_KEY = os.getenv('API_KEY')
 
-GET_ENDPOINT = 'http://127.0.0.1:8000/api/v1/last_uploaded_match/'
-POST_ENDPOINT = 'http://127.0.0.1:8000/api/v1/import_matches/'
+GET_ENDPOINT = 'https://www.aoepulse.com/api/v1/last_uploaded_match/'
+POST_ENDPOINT = 'https://www.aoepulse.com/api/v1/import_matches/'
+
+#API_KEY = os.getenv('LOCAL_API_KEY')
+#
+#GET_ENDPOINT = 'http://127.0.0.1:8000/api/v1/last_uploaded_match/'
+#POST_ENDPOINT = 'http://127.0.0.1:8000/api/v1/import_matches/'
 
 def match_to_dict(match):
   # This must match query statement in "send_matches_to_server"
@@ -65,10 +71,15 @@ def match_player_action_to_dict(action, match_id, player_id):
 def send_matches_to_server():
   r = requests.get(GET_ENDPOINT)
   last_match_time = r.json()['time']
+  last_match_datetime = datetime.strptime(last_match_time, '%Y-%m-%dT%H:%M:%S%z')
+  print('last_match_time: ', last_match_time, type(last_match_time), last_match_datetime)
   conn = sqlite3.connect(parse_replays_and_store_in_db.DB_FILE)
   cursor = conn.cursor()
   start = time.time()
   # get matches that are not currently on the server
+  cursor.execute("""select id, time from matches order by id DESC limit 1;""")
+  matches = cursor.fetchone()
+  print(matches[0], matches[1], type(matches[1]))
   cursor.execute(
     """SELECT m.id, m.average_elo, m.map_id, m.time, m.patch_id, m.ladder_id, m.patch_number,
               a.player_id, a.opening_id, a.civilization, a.victory,
@@ -85,14 +96,16 @@ def send_matches_to_server():
                           ORDER BY m.time
                           LIMIT 100000000
                           """,
-    (aoe_replay_stats.PARSER_VERSION, aoe_replay_stats.PARSER_VERSION, last_match_time))
+    (aoe_replay_stats.PARSER_VERSION, aoe_replay_stats.PARSER_VERSION, last_match_datetime))
   matches = cursor.fetchall()
   end = time.time()
   print(f'Query took {end - start} seconds.')
 
   # go through pending matches in slices to prevent more expensive db queries
-  list_of_slices = zip(*(iter(matches),) * 500)
-  number_of_slices = len(list_of_slices)
+  NUM_TO_UPLOAD = 500
+  print(f'Matches to upload: {len(matches)}')
+  list_of_slices = zip(*(iter(matches),) * NUM_TO_UPLOAD)
+  number_of_slices = len(matches) / NUM_TO_UPLOAD
   count = 0
   for match_set in list_of_slices:
     print(f'Sending set number {count} / {number_of_slices}')
