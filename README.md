@@ -2,5 +2,4 @@
 
 Repository for my scripts for using aoc-mgz to parse opening data out of aoe2 replays and then store it in a local database and later send it off to my webserver - aoepulse.com.
 
-
-```pip install aoe_opening_data```
+```pip install aoe-opening-data```
