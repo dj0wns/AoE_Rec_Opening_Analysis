@@ -113,26 +113,6 @@ def send_matches_to_server():
     for match in match_set:
       #update bad values of patch
       #from those match ids get the corresponding match player actions for player1
-      # TODO p2
-      cursor.execute(
-        '''SELECT a.event_type, a.event_id, a.time, a.duration
-               FROM match_player_actions a
-               WHERE a.match_player_id = ?
-               AND event_type = 3''', #3 is the tech event type
-        (match[15],))
-      actions = cursor.fetchall()
-      for action in actions:
-        post_dict['match_player_actions'].append(match_player_action_to_dict(action, match[0], match[7]))
-      # for p2 now
-      cursor.execute(
-        '''SELECT a.event_type, a.event_id, a.time, a.duration
-               FROM match_player_actions a
-               WHERE a.match_player_id = ?
-               AND event_type = 3''', #3 is the tech event type
-        (match[16],))
-      actions = cursor.fetchall()
-      for action in actions:
-        post_dict['match_player_actions'].append(match_player_action_to_dict(action, match[0], match[11]))
       post_dict['matches'].append(match_to_dict(match))
       # add players to dict
       post_dict['players'].add(match[7])
