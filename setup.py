@@ -17,7 +17,7 @@ setup(
       'requests==2.27.1',
     ],
     package_data={
-      '': ['aoe2techtree/data/*.json', 'aoe2techtree/data/locale/en/*.json]
+      '': ['aoe2techtree/data/*.json', 'aoe2techtree/data/locale/en/*.json']
     },
     classifiers=[
         'License :: OSI Approved :: MIT License',
