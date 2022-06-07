@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='aoe_opening_data',
-    version='1.0.7',
+    version='1.0.9',
     description='Extract opening information for AoE2:DE replays',
     url='https://github.com/dj0wns/AoE_Rec_Opening_Analysis',
     license='MIT',
