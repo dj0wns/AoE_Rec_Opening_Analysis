@@ -603,7 +603,7 @@ def print_to_csv(players,
         player_name = header.de.players[player_num].name.value.decode()
         player_civ = civs[header.de.players[player_num].civ_id]
         player_color = Color(header.de.players[player_num].color_id).name
-        player_team = header.de.players[player_num].resolved_team_id
+        player_team = header.de.players[player_num].team_id
         if player_team not in team_dict:
           team_dict[player_team] = len(team_dict)+1
         player_team = team_dict[player_team]
