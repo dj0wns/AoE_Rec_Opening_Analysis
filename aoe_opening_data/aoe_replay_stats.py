@@ -3,6 +3,7 @@ import sys
 import math
 import json
 import io
+import time
 from mgz import header, fast, enums, const
 from mgz.enums import OperationEnum
 from construct import Byte
@@ -13,12 +14,22 @@ PARSER_VERSION = 10  #Move to flags system for better resolution
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
+class Color(Enum):
+    Blue = 0
+    Red = 1
+    Green = 2
+    Yellow = 3
+    Cyan = 4
+    Purple = 5
+    Grey = 6
+    Orange = 7
 
 class EventType(Enum):
     UNIT = 1
     BUILDING = 2
     TECH = 3
     RESIGN = 4
+    TRIBUTE = 5
 
 
 class OpeningType(Enum):
@@ -233,6 +244,8 @@ ID_TECHS = {v: k for k, v in TECH_IDS.items()}
 with open(os.path.join(SCRIPT_DIR, 'aoe2techtree', 'data', 'data.json')) as json_file:
     AOE_DATA = json.load(json_file)
 
+with open(os.path.join(SCRIPT_DIR, 'aoe2techtree', 'data', 'locales', 'en', 'strings.json')) as json_file:
+    AOE_STRINGS = json.load(json_file)
 
 def item_in_list(event, list):
     for i in list:
@@ -249,7 +262,7 @@ def output_time(millis):
 
 class Event:
 
-    def __init__(self, event_type, id, name, timestamp, duration=0):
+    def __init__(self, event_type, id, name, timestamp, duration=0, data={}):
         self.event_type = event_type
         self.id = id
         if name is None:
@@ -258,19 +271,23 @@ class Event:
             self.name = name
         self.timestamp = timestamp
         self.duration = duration
+        self.data = data
 
     def __str__(self):
+        ret_string = f'{self.event_type.name}: {self.name} {output_time(self.timestamp)}'
+        if self.event_type == EventType.TRIBUTE:
+            ret_string += str(self.data)
+            #ret_string += f": {self.data['player_id']} sent {self.data['player_id_to']} {self.data['amount']} {self.data['resource_type']} and paid a fee of {self.data['fee']}"
         if self.duration:
-            return f'{self.event_type.name}: {self.name} {output_time(self.timestamp)} -> {output_time(self.timestamp+self.duration)}'
-        else:
-            return f'{self.event_type.name}: {self.name} {output_time(self.timestamp)}'
+            ret_string += f'-> {output_time(self.timestamp+self.duration)}'
+        return ret_string
 
     def __eq__(self, rhs_):
-        if (self.event_type == EventType.BUILDING):
-            return False
         if (self.event_type == rhs_.event_type and self.name == rhs_.name):
             return True
         return False
+    def __hash__(self):
+        return hash(self.event_type.name)
 
     def update_name(self):
         if self.event_type == EventType.UNIT:
@@ -297,6 +314,8 @@ class Event:
                 self.name = str(self.id)
         elif self.event_type == EventType.RESIGN:
             self.name = 'Resignation'
+        elif self.event_type == EventType.TRIBUTE:
+            self.name = 'Tribute'
 
 
 def parse_replay(data):
@@ -346,7 +365,8 @@ def parse_actions(actions):
                               time)
             elif str(unit_id) in AOE_DATA["data"]["units"]:
                 #unit not found in local records
-                name = f'{AOE_DATA["data"]["units"][str(unit_id)]["internal_name"]} ({unit_id})'
+                name_id = AOE_DATA["data"]["units"][str(unit_id)]["LanguageNameId"]
+                name = AOE_STRINGS[str(name_id)]
                 event = Event(EventType.UNIT, unit_id, name, time)
             else:
                 name = f'{unit_id}'
@@ -366,7 +386,8 @@ def parse_actions(actions):
                 event = Event(EventType.TECH, technology_id,
                               ID_TECHS[technology_id], time, duration)
             elif str(technology_id) in AOE_DATA["data"]["techs"]:
-                name = f'{AOE_DATA["data"]["techs"][str(technology_id)]["internal_name"]} ({technology_id})'
+                name_id = AOE_DATA["data"]["techs"][str(technology_id)]["LanguageNameId"]
+                name = AOE_STRINGS[str(name_id)]
                 event = Event(EventType.TECH, technology_id, name, time,
                               duration)
             else:
@@ -387,8 +408,9 @@ def parse_actions(actions):
             if building_id in ID_BUILDINGS:
                 event = Event(EventType.BUILDING, building_id,
                               ID_BUILDINGS[building_id], time)
-            elif building_id in AOE_DATA["data"]["buildings"]:
-                name = f'{AOE_DATA["data"]["buildings"][str(building_id)]["internal_name"]} ({building_id})'
+            elif str(building_id) in AOE_DATA["data"]["buildings"]:
+                name_id = AOE_DATA["data"]["buildings"][str(building_id)]["LanguageNameId"]
+                name = AOE_STRINGS[str(name_id)]
                 event = Event(EventType.BUILDING, building_id, name, time)
             else:
                 name = f'{building_id}'
@@ -401,6 +423,17 @@ def parse_actions(actions):
             event = Event(EventType.RESIGN, 0, name, time)
             players[player_id].append(event)
             loser_index = player_id
+
+        elif o[1][0] == fast.Action.DE_TRIBUTE:
+            name = 'Tribute'
+            player_id = o[1][1]["player_id"]
+            player_id_to = o[1][1]["player_id_to"]
+            event = Event(EventType.TRIBUTE,
+                          0,
+                          name,
+                          time,
+                          data = o[1][1])
+            players[player_id].append(event)
 
     return players, civs, loser_index
 
@@ -545,6 +578,131 @@ def guess_strategy(players):
             player_strategies.append(openings)
     return player_strategies
 
+def print_to_csv(players,
+                 header,
+                 civs,
+                 player_strategies,
+                 include_units = True,
+                 only_unique_units = True,
+                 include_buildings = True,
+                 only_unique_buildings = True,
+                 include_techs = True,
+                 include_player_openings = True):
+    #output to std with information
+    ret_string = ""
+    if header is not None:
+        ret_string += 'Map, ' + const.DE_MAP_NAMES[header.de.selected_map_id] + "\n"
+    #go through once to get the game data before doing individual player stuff
+    player_data = {}
+    team_dict = {}
+    last_timestamp = -1
+    player_num = 0
+    for player in players:
+        if not player:
+            continue
+        player_name = header.de.players[player_num].name.value.decode()
+        player_civ = civs[header.de.players[player_num].civ_id]
+        player_color = Color(header.de.players[player_num].color_id).name
+        player_team = header.de.players[player_num].resolved_team_id
+        if player_team not in team_dict:
+          team_dict[player_team] = len(team_dict)+1
+        player_team = team_dict[player_team]
+        player_data[player_num] = {"name": player_name,
+                               "civ": player_civ,
+                               "color": player_color,
+                               "team": player_team,
+                               "victory_state": "Won",
+                               "feudal": "N/A",
+                               "castle": "N/A",
+                               "imp": "N/A"}
+        player_num += 1
+    player_num = 0
+    tribute_strings = []
+    for player in players:
+        units = []
+        buildings = []
+        techs = []
+        tributes = []
+        resigned = False
+        if not player:
+            continue
+        for unique_action in player:
+          if unique_action.timestamp > last_timestamp:
+              last_timestamp = unique_action.timestamp
+          if unique_action.event_type == EventType.UNIT:
+              units.append(unique_action)
+          elif unique_action.event_type == EventType.BUILDING:
+              buildings.append(unique_action)
+          elif unique_action.event_type == EventType.TECH:
+              techs.append(unique_action)
+              if unique_action.id in ID_TECHS:
+                  if ID_TECHS[unique_action.id] == "Feudal Age":
+                      player_data[player_num]["feudal"] = output_time(unique_action.timestamp + unique_action.duration)
+                  elif ID_TECHS[unique_action.id] == "Castle Age":
+                      player_data[player_num]["castle"] = output_time(unique_action.timestamp + unique_action.duration)
+                  elif ID_TECHS[unique_action.id] == "Imperial Age":
+                      player_data[player_num]["imp"] = output_time(unique_action.timestamp + unique_action.duration)
+          elif unique_action.event_type == EventType.TRIBUTE:
+              tributes.append(unique_action)
+          elif unique_action.event_type == EventType.RESIGN:
+              player_data[player_num]["victory_state"] = "Lost"
+        if include_units or include_buildings or include_techs or include_player_openings:
+            ret_string += f'\n\n{player_data[player_num]["name"]}:\n'
+        if include_player_openings:
+            ret_string += "Opening Flags: " + hex(player_strategies[player_num]) + "\n"
+            for opening in OpeningType:
+                if opening == OpeningType.Unknown:
+                    continue
+                if (player_strategies[player_num] & opening.value) == opening.value:
+                    ret_string += f'{opening}, {hex(opening.value)}\n'
+        if only_unique_units:
+            temp_set = set()
+            units = [x for x in units if x not in temp_set and not temp_set.add(x)]
+        if only_unique_buildings:
+            #hack to preserve list order
+            temp_set = set()
+            buildings = [x for x in buildings if x not in temp_set and not temp_set.add(x)]
+        if units and include_units:
+            ret_string += '\nUnit, Time\n'
+            for unit in units:
+                ret_string += f'{unit.name}, {output_time(unit.timestamp)}\n'
+
+        if buildings and include_buildings:
+            ret_string += '\nBuilding, Time\n'
+            for building in buildings:
+                ret_string += f'{building.name}, {output_time(building.timestamp)}\n'
+
+        if techs and include_techs:
+            ret_string += "\nTech, Time, Est Completion\n"
+            for tech in techs:
+                ret_string += f'{tech.name}, {output_time(tech.timestamp)}, {output_time(tech.timestamp + tech.duration)}\n'
+
+        for tribute in tributes:
+            if (tribute.data["food"] > 0  or
+                tribute.data["wood"] > 0  or
+                tribute.data["gold"] > 0  or
+                tribute.data["stone"] > 0) :
+                tribute_strings.append(f'{player_data[player_num]["name"]}, '
+                        f'{header.de.players[tribute.data["player_id_to"]-1].name.value.decode()}, '
+                        f'{output_time(tribute.timestamp)}, '
+                        f'{tribute.data["food"]}, '
+                        f'{tribute.data["wood"]}, '
+                        f'{tribute.data["gold"]}, '
+                        f'{tribute.data["stone"]}\n')
+        player_num += 1
+    ret_string += f'\nName, Civ, Color, Team, Victory State, Feudal Time, Castle Time, Imp Time\n'
+    for player in player_data.values():
+        ret_string += f'{player["name"]}, {player["civ"]}, {player["color"]}, {player["team"]}, {player["victory_state"]}, {player["feudal"]}, {player["castle"]} ,{player["imp"]}\n'
+    if tribute_strings:
+        #lazy hacky sort tributes since i dont want to change the code rn
+        tribute_strings = sorted(tribute_strings, key=lambda x: time.mktime(time.strptime(x.split(',')[2]," %M:%S")))
+        ret_string += "\nTribute from Player, To Player, Time, Food, Wood, Gold, Stone\n"
+        for tribute in tribute_strings:
+          ret_string += tribute
+    ret_string += f'\nDuration, {output_time(last_timestamp)}\n'
+
+    return ret_string
+
 
 def print_events(players, header, civs, player_strategies):
     #output to std with information
@@ -572,5 +730,4 @@ def print_events(players, header, civs, player_strategies):
 if __name__ == '__main__':
     players, header, civs, loser_id = parse_replay(sys.argv[1])
     player_strategies = guess_strategy(players)
-    print(loser_id, "Lost")
-    print_events(players, header, civs, player_strategies)
+    print(print_to_csv(players, header, civs, player_strategies, False, False, False, False, False, False))
