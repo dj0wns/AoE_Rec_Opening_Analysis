@@ -682,23 +682,23 @@ def print_to_csv(players,
                 tribute.data["wood"] > 0  or
                 tribute.data["gold"] > 0  or
                 tribute.data["stone"] > 0) :
-                tribute_strings.append(f'{player_data[player_num]["name"]}, '
+                tribute_strings.append((tribute.timestamp,
+                        f'{player_data[player_num]["name"]}, '
                         f'{header.de.players[tribute.data["player_id_to"]-1].name.value.decode()}, '
                         f'{output_time(tribute.timestamp)}, '
                         f'{tribute.data["food"]}, '
                         f'{tribute.data["wood"]}, '
                         f'{tribute.data["gold"]}, '
-                        f'{tribute.data["stone"]}\n')
+                        f'{tribute.data["stone"]}\n'))
         player_num += 1
     ret_string += f'\nName, Civ, Color, Team, Victory State, Feudal Time, Castle Time, Imp Time\n'
     for player in player_data.values():
         ret_string += f'{player["name"]}, {player["civ"]}, {player["color"]}, {player["team"]}, {player["victory_state"]}, {player["feudal"]}, {player["castle"]} ,{player["imp"]}\n'
     if tribute_strings:
-        #lazy hacky sort tributes since i dont want to change the code rn
-        tribute_strings = sorted(tribute_strings, key=lambda x: time.mktime(time.strptime(x.split(',')[2]," %M:%S")))
+        tribute_strings = sorted(tribute_strings, key=lambda x:x[0])
         ret_string += "\nTribute from Player, To Player, Time, Food, Wood, Gold, Stone\n"
         for tribute in tribute_strings:
-          ret_string += tribute
+          ret_string += tribute[1]
     ret_string += f'\nDuration, {output_time(last_timestamp)}\n'
 
     return ret_string
