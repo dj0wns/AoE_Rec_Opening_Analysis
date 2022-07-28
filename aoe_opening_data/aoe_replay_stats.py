@@ -4,7 +4,7 @@ import math
 import json
 import io
 import time
-from mgz import header, fast, enums, const
+from mgz import header, fast, enums, const, summary
 from mgz.enums import OperationEnum
 from construct import Byte
 from collections import OrderedDict
@@ -579,6 +579,7 @@ def guess_strategy(players):
     return player_strategies
 
 def print_to_csv(players,
+                 summary,
                  header,
                  civs,
                  player_strategies,
@@ -591,7 +592,7 @@ def print_to_csv(players,
     #output to std with information
     ret_string = ""
     if header is not None:
-        ret_string += 'Map, ' + const.DE_MAP_NAMES[header.de.selected_map_id] + "\n"
+        ret_string += 'Map, ' + summary.get_map()["name"] + "\n"
     #go through once to get the game data before doing individual player stuff
     player_data = {}
     team_dict = {}
@@ -730,4 +731,6 @@ def print_events(players, header, civs, player_strategies):
 if __name__ == '__main__':
     players, header, civs, loser_id = parse_replay(sys.argv[1])
     player_strategies = guess_strategy(players)
-    print(print_to_csv(players, header, civs, player_strategies, False, False, False, False, False, False))
+    with open(sys.argv[1], "rb") as handle:
+      game_summary = summary.FullSummary(handle)
+    print(print_to_csv(players, game_summary, header, civs, player_strategies, False, False, False, False, False, False))
