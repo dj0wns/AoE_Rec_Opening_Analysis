@@ -194,6 +194,7 @@ def execute():
         continue
 
       player_processing_queue.put((match_id, player0, player1))
+      added_matches_set.add(match_id)
 
     # now process the player_processing_queue and pop matches with all players into the matches_resolve queue
     players_to_resolve = []
@@ -207,7 +208,6 @@ def execute():
         # both players exist so just fire off the match
         player_0_dict = {"id":player0, "elo":player_id_dict[player0]}
         player_1_dict = {"id":player1, "elo":player_id_dict[player1]}
-        added_matches_set.add(match_id)
         match_queue.put((match_id, player_0_dict, player_1_dict))
         continue
       if player_id_dict[player1] < 0:
@@ -222,8 +222,9 @@ def execute():
       # now if there are enough players in the players to resolve array, resolve them or the queue is empty
       if len(players_to_resolve) >= ELOS_PER_QUERY or player_processing_queue.empty():
         player_elos = get_elo_for_player_ids(players_to_resolve)
-        for player, elo in player_elos.items():
-          player_id_dict[player] = elo
+        if player_elos is not None:
+          for player, elo in player_elos.items():
+            player_id_dict[player] = elo
         players_to_resolve.clear() # clear the queue
         # now fire off matches to resolve
         while not matches_to_resolve.empty():
@@ -237,7 +238,6 @@ def execute():
           #send the relevant data to the queue!
           player_0_dict = {"id":player0, "elo":player_id_dict[player0]}
           player_1_dict = {"id":player1, "elo":player_id_dict[player1]}
-          added_matches_set.add(match_id)
           match_queue.put((match_id, player_0_dict, player_1_dict))
 
     print(player_id_queue.qsize(),len(player_id_dict))
