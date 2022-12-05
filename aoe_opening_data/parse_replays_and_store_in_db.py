@@ -69,7 +69,7 @@ def init_db():
     sql_commands.append("""CREATE INDEX IF NOT EXISTS idx_match_player_match_id
                            on match_players (match_id);""")
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         for sql_command in sql_commands:
             c.execute(sql_command)
@@ -194,7 +194,7 @@ def init_flat_db():
                             CONSTRAINT fk_player_id FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
                             ); """)
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         for sql_command in sql_commands:
             c.execute(sql_command)
@@ -229,7 +229,7 @@ def update_schema():
 ### UNIVERSAL SQL FUNCTIONS ###
 def connect_and_modify(statement):
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         c.execute(statement)
         conn.commit()
@@ -241,7 +241,7 @@ def connect_and_modify(statement):
 
 def connect_and_modify(statement, args):
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         c.execute(statement, args)
         conn.commit()
@@ -253,7 +253,7 @@ def connect_and_modify(statement, args):
 
 def connect_and_modify_with_generator(generator):
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         for statement, args in generator:
             c.execute(statement, args)
@@ -266,7 +266,7 @@ def connect_and_modify_with_generator(generator):
 
 def connect_and_return(statement, args):
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         if args is None:
             c.execute(statement)
@@ -281,7 +281,7 @@ def connect_and_return(statement, args):
 
 def connect_and_return_with_list(operations):
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         return_list = []
         for statement, args in operations:
@@ -296,7 +296,7 @@ def connect_and_return_with_list(operations):
 
 def connect_and_modify_with_list(operations):
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(DB_FILE, timeout=60)
         c = conn.cursor()
         for statement, args in operations:
             c.execute(statement, args)
@@ -500,9 +500,9 @@ def import_from_db(input_db, minimal_import, flat_import):
     else:
         print(f'Writing from {input_db} to {DB_FILE}')
 
-    output_conn = sqlite3.connect(DB_FILE)
+    output_conn = sqlite3.connect(DB_FILE, timeout=60)
     output_cursor = output_conn.cursor()
-    input_conn = sqlite3.connect(input_db)
+    input_conn = sqlite3.connect(input_db, timeout=60)
     input_cursor = input_conn.cursor()
 
     #first get all matches

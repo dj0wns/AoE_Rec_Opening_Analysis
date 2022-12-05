@@ -32,7 +32,7 @@ def match_to_dict(match):
     elo = int(re.search('^\d+',str(match[1]))[0])
   else:
     elo = match[1]
-  output_dict['average_elo'] = elo
+  output_dict['average_elo'] = round(elo) #make sure elo is an integer
   output_dict['map_id'] = match[2]
   output_dict['time'] = match[3]
   output_dict['patch_id'] = match[4]
@@ -135,8 +135,8 @@ def send_matches_to_server():
     print(f'Full loop toop {end - start} seconds.')
     print(f'Sent set number {count} / {number_of_slices}')
     count += 1
-    print('sleeping 20s')
-    time.sleep(20)
+    print('sleeping 1s')
+    time.sleep(1)
   conn.close()
 
 if __name__ == '__main__':
