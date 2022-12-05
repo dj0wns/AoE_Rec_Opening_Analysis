@@ -10,6 +10,7 @@ import parse_replays_and_store_in_db
 
 VERSION = 71094
 NUM_PROCESSES = 16
+# Keep our query size as large as possible to reduce strain one aoe.ms api
 PLAYERS_PER_QUERY = 100
 ELOS_PER_QUERY = 100
 processes = []
