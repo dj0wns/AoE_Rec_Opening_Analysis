@@ -9,26 +9,26 @@ import multiprocessing
 import parse_replays_and_store_in_db
 
 VERSION = 75350
-NUM_PROCESSES = 16
+NUM_PROCESSES = 1
 # Keep our query size as large as possible to reduce strain one aoe.ms api
 PLAYERS_PER_QUERY = 100
 ELOS_PER_QUERY = 100
 LEADERBOARD_IDS = [
   # leaderboard id : matchtype id
   # from https://aoe-api.reliclink.com/community/leaderboard/getAvailableLeaderboards?title=age2
-  (3, 6), # RM 1v1
-  #(4, 7), # RM Team
+  #(3, [6]), # RM 1v1
+  (4, [7,8,9]), # RM Team - internally we will use 402, 403, 404 for 2v2, 3v3, 4v4
   # EMPIRE WARS
-  (13, 26), #EW 1v1
-  #(14, 27), #EW Team
+  #(13, [26]), #EW 1v1
+  #(14, [27,28,29]), #EW Team
   # THESE ARENT SUPPORTED BY THE PARSER YET
-  #(15, 66), #Controller RM 1v1
-  #(16, 67), #Controller RM Team
+  #(15, [66]), #Controller RM 1v1
+  #(16, [67,68,69]), #Controller RM Team
 ]
 
 processes = []
 
-# send match_id, (player_id, elo), (player_id, elo)
+# send match_id, [(player_id, elo), (player_id, elo), ...], leaderboard_id
 match_queue = multiprocessing.JoinableQueue()
 
 def match_queue_consumer(queue):
@@ -40,14 +40,14 @@ def match_queue_consumer(queue):
     else:
       print(f'processing item {item}')
       match_id = item[0]
-      player0 = item[1]
-      player1 = item[2]
-      leaderboard_id = item[3]
-      parse_replay_for_match(match_id, player0, player1, leaderboard_id)
+      players = item[1]
+      leaderboard_id = item[2]
+      parse_replay_for_match(match_id, players, leaderboard_id)
       queue.task_done()
 
-def parse_replay_for_match(match_id, player0, player1, leaderboard_id):
-  for player_id in [player0["id"], player1["id"]]:
+def parse_replay_for_match(match_id, players, leaderboard_id):
+  player_ids = [player["id"] for player in players]
+  for player_id in player_ids:
     try:
       headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
       r = requests.get(
@@ -62,9 +62,8 @@ def parse_replay_for_match(match_id, player0, player1, leaderboard_id):
     try:
       replay_zip = zipfile.ZipFile(io.BytesIO(r.content))
       replay = replay_zip.read(replay_zip.namelist()[0])
-      average_rating = (player0["elo"] + player1["elo"])/2.
       parse_replays_and_store_in_db.parse_replay_file(
-          match_id, player0["id"], player1["id"], average_rating,
+          match_id, players,
           leaderboard_id, io.BytesIO(replay), VERSION)
       #Success!
       return
@@ -130,10 +129,10 @@ def execute(leaderboard_ids):
   player_id_dict = {} # connects player_id to most recently observed elo
   player_id_queue = queue.Queue()
   # allows for bulk resolving of player elo
-  player_processing_queue = queue.Queue() # match_id, player_id, player_id
+  player_processing_queue = queue.Queue() # match_id, [player_ids]
   added_matches_set = set() #set of added matches for quick lookups so we dont collide
   leaderboard_id = leaderboard_ids[0]
-  matchtype_id = leaderboard_ids[1]
+  matchtype_ids = leaderboard_ids[1]
 
   # Get starting player_id_set from top 200 on the aoe.ms api
 
@@ -171,13 +170,10 @@ def execute(leaderboard_ids):
       continue
     for match in matches["matchHistoryStats"]:
       match_id = match["id"]
-      if match["matchtype_id"] != matchtype_id:
+      if match["matchtype_id"] not in matchtype_ids:
         continue
       # sanity check that it is ranked
       if match["description"] != "AUTOMATCH":
-        continue
-      # make sure the match has exactly 2 players and ids!
-      if len(match["matchhistoryreportresults"]) != 2:
         continue
 
       # ignore matches that are more than a week old
@@ -192,16 +188,16 @@ def execute(leaderboard_ids):
           continue
 
       #get players and match id
-      player0 = match["matchhistoryreportresults"][0]["profile_id"]
-      player1 = match["matchhistoryreportresults"][1]["profile_id"]
+      any_need_update = False
+      player_ids = []
+      for player in match["matchhistoryreportresults"]:
+        player_id = player["profile_id"]
+        player_ids.append(player_id)
+        if player_id not in player_id_dict:
+          any_need_update = True
+          player_id_dict[player_id] = -1 # to be updated later
+          player_id_queue.put(player_id)
 
-      #add players to set and queue if not already found
-      if player0 not in player_id_dict:
-        player_id_dict[player0] = -1 # to be updated later
-        player_id_queue.put(player0)
-      if player1 not in player_id_dict:
-        player_id_dict[player1] = -1 # to be updated
-        player_id_queue.put(player1)
       #make sure match isnt already in db
       if parse_replays_and_store_in_db.does_match_exist(match_id):
         continue
@@ -209,31 +205,31 @@ def execute(leaderboard_ids):
       if match_id in added_matches_set:
         continue
 
-      player_processing_queue.put((match_id, player0, player1))
+      player_processing_queue.put((match_id, player_ids))
       added_matches_set.add(match_id)
 
     # now process the player_processing_queue and pop matches with all players into the matches_resolve queue
     players_to_resolve = []
-    matches_to_resolve = queue.Queue() # (match_id, player0_id, player1_id)
+    matches_to_resolve = queue.Queue() # (match_id, [player_ids])
     while not player_processing_queue.empty():
       item = player_processing_queue.get()
       match_id = item[0]
-      player0 = item[1]
-      player1 = item[2]
-      if player_id_dict[player0] >= 0 and player_id_dict[player1] >= 0:
+      player_ids = item[1]
+      some_players_need_resolve = False
+      for player in player_ids:
+        if player_id_dict[player] < 0:
+          some_players_need_resolve = True
+          players_to_resolve.append(player)
+
+      if not some_players_need_resolve:
         # both players exist so just fire off the match
-        player_0_dict = {"id":player0, "elo":player_id_dict[player0]}
-        player_1_dict = {"id":player1, "elo":player_id_dict[player1]}
-        match_queue.put((match_id, player_0_dict, player_1_dict, leaderboard_id))
+        player_dict_array = [{"id":player, "elo":player_id_dict[player]} for player in player_ids]
+        match_queue.put((match_id, player_dict_array, leaderboard_id))
         continue
-      if player_id_dict[player1] < 0:
-        if player0 not in players_to_resolve:
-          players_to_resolve.append(player0)
-      if player_id_dict[player1] < 0:
-        if player1 not in players_to_resolve:
-          players_to_resolve.append(player1)
-      # we have a match needing resolution so store it in the resolve queue
-      matches_to_resolve.put(item)
+      else:
+        # we have a match needing resolution so store it in the resolve queue
+        matches_to_resolve.put(item)
+
 
       # now if there are enough players in the players to resolve array, resolve them or the queue is empty
       if len(players_to_resolve) >= ELOS_PER_QUERY or player_processing_queue.empty():
@@ -246,15 +242,19 @@ def execute(leaderboard_ids):
         while not matches_to_resolve.empty():
           item = matches_to_resolve.get()
           match_id = item[0]
-          player0 = item[1]
-          player1 = item[2]
+          player_ids = item[1]
           # double check elos have been updated, else toss the match
-          if player_id_dict[player0] < 0 or player_id_dict[player1] < 0:
+          some_players_need_resolve = False
+          for player in player_ids:
+            if player_id_dict[player] < 0:
+              some_players_need_resolve = True
+              players_to_resolve.append(player)
+
+          if some_players_need_resolve:
             continue
           #send the relevant data to the queue!
-          player_0_dict = {"id":player0, "elo":player_id_dict[player0]}
-          player_1_dict = {"id":player1, "elo":player_id_dict[player1]}
-          match_queue.put((match_id, player_0_dict, player_1_dict, leaderboard_id))
+          player_dict_array = [{"id":player, "elo":player_id_dict[player]} for player in player_ids]
+          match_queue.put((match_id, player_dict_array, leaderboard_id))
 
     print(player_id_queue.qsize(),len(player_id_dict))
     print(match_queue.qsize())

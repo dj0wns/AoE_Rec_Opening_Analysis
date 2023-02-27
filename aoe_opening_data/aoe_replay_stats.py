@@ -337,8 +337,8 @@ def parse_replay(data):
             actions.append((o, time))
         elif o[0] == fast.Operation.SYNC:
             time += o[1][0]
-    players, civs, loser_index = parse_actions(actions)
-    return players, h, civs, loser_index
+    players, civs, loser_ids = parse_actions(actions)
+    return players, h, civs, loser_ids
 
 
 def parse_actions(actions):
@@ -354,7 +354,7 @@ def parse_actions(actions):
         civs[int(value) - 10270] = name
 
 
-    loser_index = None
+    loser_ids = []
     for o, time in actions:
         if o[1][0] == fast.Action.DE_QUEUE:
             player_id = o[1][1]["player_id"]
@@ -422,7 +422,7 @@ def parse_actions(actions):
             player_id = o[1][1]["player_id"]
             event = Event(EventType.RESIGN, 0, name, time)
             players[player_id].append(event)
-            loser_index = player_id
+            loser_ids.append(player_id)
 
         elif o[1][0] == fast.Action.DE_TRIBUTE:
             name = 'Tribute'
@@ -435,7 +435,7 @@ def parse_actions(actions):
                           data = o[1][1])
             players[player_id].append(event)
 
-    return players, civs, loser_index
+    return players, civs, loser_ids
 
 
 def guess_strategy(players):
@@ -729,7 +729,7 @@ def print_events(players, header, civs, player_strategies):
 
 
 if __name__ == '__main__':
-    players, header, civs, loser_id = parse_replay(sys.argv[1])
+    players, header, civs, loser_ids = parse_replay(sys.argv[1])
     player_strategies = guess_strategy(players)
     with open(sys.argv[1], "rb") as handle:
       game_summary = summary.FullSummary(handle)

@@ -48,6 +48,7 @@ def init_db():
                             victory int DEFAULT -1,
                             parser_version int DEFAULT 0,
                             time_parsed datetime DEFAULT CURRENT_TIMESTAMP,
+                            elo integer DEFAULT -1,
                             CONSTRAINT fk_player FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE,
                             CONSTRAINT fk_match FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE,
                             UNIQUE(player_id, match_id)
@@ -69,7 +70,7 @@ def init_db():
     sql_commands.append("""CREATE INDEX IF NOT EXISTS idx_match_player_match_id
                            on match_players (match_id);""")
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        conn = sqlite3.connect(DB_FILE, timeout=300)
         c = conn.cursor()
         for sql_command in sql_commands:
             c.execute(sql_command)
@@ -194,7 +195,7 @@ def init_flat_db():
                             CONSTRAINT fk_player_id FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
                             ); """)
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        conn = sqlite3.connect(DB_FILE, timeout=300)
         c = conn.cursor()
         for sql_command in sql_commands:
             c.execute(sql_command)
@@ -224,49 +225,54 @@ def update_schema():
     #fourth update, try a time index
     connect_and_modify(
         """CREATE INDEX time_index ON matches(time)""", ())
+    # fifth update, match player elo on top of average elo
+    connect_and_modify(
+        """ALTER TABLE match_players ADD COLUMN elo integer DEFAULT -1;""", ())
 
 
 ### UNIVERSAL SQL FUNCTIONS ###
-def connect_and_modify(statement):
-    try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
-        c = conn.cursor()
-        c.execute(statement)
-        conn.commit()
-    except Exception as e:
-        print(e)
-    finally:
-        conn.close()
 
-
-def connect_and_modify(statement, args):
+def connect_and_modify(statement, args, conn=None):
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        manage_conn = False;
+        if conn is None:
+          conn = sqlite3.connect(DB_FILE, timeout=300)
+          manage_conn = True;
         c = conn.cursor()
         c.execute(statement, args)
-        conn.commit()
+        if manage_conn:
+          conn.commit()
     except Exception as e:
         print(e)
     finally:
-        conn.close()
+        if manage_conn:
+          conn.close()
 
 
-def connect_and_modify_with_generator(generator):
+def connect_and_modify_with_generator(generator, conn=None):
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        manage_conn = False;
+        if conn is None:
+          conn = sqlite3.connect(DB_FILE, timeout=300)
+          manage_conn = True;
         c = conn.cursor()
         for statement, args in generator:
             c.execute(statement, args)
-        conn.commit()
+        if manage_conn:
+          conn.commit()
     except Exception as e:
         print(e)
     finally:
-        conn.close()
+        if manage_conn:
+          conn.close()
 
 
-def connect_and_return(statement, args):
+def connect_and_return(statement, args, conn=None):
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        manage_conn = False;
+        if conn is None:
+          conn = sqlite3.connect(DB_FILE, timeout=300)
+          manage_conn = True;
         c = conn.cursor()
         if args is None:
             c.execute(statement)
@@ -276,12 +282,13 @@ def connect_and_return(statement, args):
     except Exception as e:
         print(e)
     finally:
-        conn.close()
+        if manage_conn:
+          conn.close()
 
 
 def connect_and_return_with_list(operations):
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        conn = sqlite3.connect(DB_FILE, timeout=300)
         c = conn.cursor()
         return_list = []
         for statement, args in operations:
@@ -294,17 +301,22 @@ def connect_and_return_with_list(operations):
         conn.close()
 
 
-def connect_and_modify_with_list(operations):
+def connect_and_modify_with_list(operations, conn=None):
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=60)
+        manage_conn = False;
+        if conn is None:
+          conn = sqlite3.connect(DB_FILE, timeout=300)
+          manage_conn = True;
         c = conn.cursor()
         for statement, args in operations:
             c.execute(statement, args)
-        conn.commit()
+        if manage_conn:
+          conn.commit()
     except Exception as e:
         print(e)
     finally:
-        conn.close()
+        if manage_conn:
+          conn.close()
 
 
 def add_player(player_id):
@@ -336,11 +348,11 @@ def update_match_player(opening_id, match_player_id):
             (opening_id, aoe_replay_stats.PARSER_VERSION, match_player_id))
 
 
-def add_unparsed_match_player(player_id, match_id, civilization, victory):
+def add_unparsed_match_player(player_id, match_id, civilization, victory, elo, conn=None):
     connect_and_modify(
-        """INSERT OR IGNORE INTO match_players(player_id, match_id, civilization, victory) VALUES
-                            (?,?,?,?)""",
-        (player_id, match_id, civilization, victory))
+        """INSERT OR IGNORE INTO match_players(player_id, match_id, civilization, victory, elo) VALUES
+                            (?,?,?,?,?)""",
+        (player_id, match_id, civilization, victory, elo), conn)
 
 
 def match_player_actions_generator(match_player_id, action_list):
@@ -386,9 +398,9 @@ def get_match_player_actions(match_player_id):
     return match_player_actions
 
 
-def add_match_player_actions(match_player_id, action_list):
+def add_match_player_actions(match_player_id, action_list, conn=None):
     generator = match_player_actions_generator(match_player_id, action_list)
-    connect_and_modify_with_generator(generator)
+    connect_and_modify_with_generator(generator, conn)
 
 
 def does_match_exist(match_id):
@@ -404,10 +416,10 @@ def get_match_players(match_id):
     return match_players
 
 
-def get_match_player_id(player_id, match_id):
+def get_match_player_id(player_id, match_id, conn=None):
     match_player_id = connect_and_return(
         "SELECT id FROM match_players WHERE player_id = ? AND match_id = ?",
-        (player_id, match_id))
+        (player_id, match_id), conn)
     if match_player_id is None or len(match_player_id) == 0:
         return None
     return match_player_id[0][0]
@@ -444,48 +456,64 @@ def get_actions_for_match_players(match_player_list):
     return match_players_actions
 
 
-def parse_replay_file(match_id, player1_id, player2_id, average_elo, ladder_id,
+def parse_replay_file(match_id, player_id_elo_list, ladder_id,
                       file_data, patch_number):
     #match already in db!
     if does_match_exist(match_id):
         return False
     try:
-        players, header, civs, loser_id = aoe_replay_stats.parse_replay(
+        players, header, civs, loser_ids = aoe_replay_stats.parse_replay(
             file_data)
     except Exception as e:
         print(e)
         return False
-    player_ids = [player1_id, player2_id]
+    player_ids = [player["id"] for player in player_id_elo_list]
+    average_elo = sum(player["elo"] for player in player_id_elo_list) / len(player_id_elo_list)
+    if len(player_id_elo_list) > 2:
+      ladder_id = ladder_id * 100 + int(len(player_id_elo_list)/2)
     player_num = 0
 
     #now plug it into the db!
     #first add players
     operations = []
-    operations.append(add_player(player1_id))
-    operations.append(add_player(player2_id))
+    for player_id in player_ids:
+      operations.append(add_player(player_id))
     operations.append(
         add_match(match_id, average_elo, header.de.selected_map_id,
                   header.save_version, ladder_id, patch_number))
 
-    connect_and_modify_with_list(operations)
-    for i in range(len(players)):
-        if not players[i]:
-            continue
-        # now add match player
-        winner_value = -1
-        if loser_id is not None:
-            if loser_id == i:
-                winner_value = 0
-            else:
-                winner_value = 1
-        #first add template match_player with basic info
-        add_unparsed_match_player(player_ids[player_num], match_id,
-                                  header.de.players[player_num].civ_id,
-                                  winner_value)
-        match_player_id = get_match_player_id(player_ids[player_num], match_id)
-        #now add player actions
-        add_match_player_actions(match_player_id, players[i])
-        player_num += 1
+    # Manage connection ourselve to improve speed
+    try:
+        conn = sqlite3.connect(DB_FILE, timeout=300)
+        connect_and_modify_with_list(operations, conn)
+        operations = []
+        for i in range(len(players)):
+            if not players[i]:
+                continue
+            # now add match player
+            winner_value = -1
+            if loser_ids is not None:
+                if i in loser_ids:
+                    winner_value = 0
+                else:
+                    winner_value = 1
+            player_id = player_id_elo_list[player_num]["id"]
+            player_elo = player_id_elo_list[player_num]["elo"]
+            #first add template match_player with basic info
+            add_unparsed_match_player(player_id, match_id,
+                                      header.de.players[player_num].civ_id,
+                                      winner_value,
+                                      player_elo, conn)
+            match_player_id = get_match_player_id(player_id, match_id, conn)
+            #now add player actions
+            add_match_player_actions(match_player_id, players[i], conn)
+            player_num += 1
+        conn.commit()
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
 
     return True
 
@@ -500,9 +528,9 @@ def import_from_db(input_db, minimal_import, flat_import):
     else:
         print(f'Writing from {input_db} to {DB_FILE}')
 
-    output_conn = sqlite3.connect(DB_FILE, timeout=60)
+    output_conn = sqlite3.connect(DB_FILE, timeout=300)
     output_cursor = output_conn.cursor()
-    input_conn = sqlite3.connect(input_db, timeout=60)
+    input_conn = sqlite3.connect(input_db, timeout=300)
     input_cursor = input_conn.cursor()
 
     #first get all matches
@@ -751,7 +779,7 @@ if __name__ == '__main__':
     else:
       init_db()
       update_schema()
-      
+
     if args.import_from_other_db is not None:
         import_from_db(args.import_from_other_db, minimal_import, flat_import)
     execute(args.input, args.delete_replay_after_parse, args.analysis_only)
