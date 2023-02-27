@@ -416,7 +416,7 @@ def get_match_player_id(player_id, match_id):
 def get_match_players_needing_update():
     #Added small thing to ignore first 1m matches when searching, remove this if you need a whole db update
     match_players = connect_and_return(
-        "SELECT * FROM match_players WHERE parser_version < ? AND match_id > 129934042",
+        "SELECT * FROM match_players WHERE parser_version < ? AND match_id > 202400210",
         (aoe_replay_stats.PARSER_VERSION,))
     if len(match_players) == 0:
         return None
