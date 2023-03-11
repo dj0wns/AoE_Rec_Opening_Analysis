@@ -8,18 +8,18 @@ import multiprocessing
 
 import parse_replays_and_store_in_db
 
-VERSION = 75350
-NUM_PROCESSES = 1
+VERSION = 78174
+NUM_PROCESSES = 16
 # Keep our query size as large as possible to reduce strain one aoe.ms api
 PLAYERS_PER_QUERY = 100
 ELOS_PER_QUERY = 100
 LEADERBOARD_IDS = [
   # leaderboard id : matchtype id
   # from https://aoe-api.reliclink.com/community/leaderboard/getAvailableLeaderboards?title=age2
-  #(3, [6]), # RM 1v1
+  (3, [6]), # RM 1v1
   (4, [7,8,9]), # RM Team - internally we will use 402, 403, 404 for 2v2, 3v3, 4v4
   # EMPIRE WARS
-  #(13, [26]), #EW 1v1
+  (13, [26]), #EW 1v1
   #(14, [27,28,29]), #EW Team
   # THESE ARENT SUPPORTED BY THE PARSER YET
   #(15, [66]), #Controller RM 1v1

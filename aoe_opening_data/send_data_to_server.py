@@ -93,6 +93,7 @@ def send_matches_to_server():
                           AND b.parser_version == ?
                           AND a.victory == 1
                           AND m.time > ?
+                          AND (m.ladder_id == 3 OR m.ladder_id == 13)
                           ORDER BY m.time
                           LIMIT 100000000
                           """,
