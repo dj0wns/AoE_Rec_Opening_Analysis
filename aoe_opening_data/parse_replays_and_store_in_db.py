@@ -322,7 +322,6 @@ def connect_and_modify_with_list(operations, conn=None):
 def add_player(player_id):
     return ("INSERT OR IGNORE INTO players(id) VALUES(?)", (player_id,))
 
-
 def add_match(match_id, average_elo, map_id, patch_id, ladder_id, patch_number, time=False):
     if time:
         return (
@@ -428,7 +427,7 @@ def get_match_player_id(player_id, match_id, conn=None):
 def get_match_players_needing_update():
     #Added small thing to ignore first 1m matches when searching, remove this if you need a whole db update
     match_players = connect_and_return(
-        "SELECT * FROM match_players WHERE parser_version < ? AND match_id > 202400210",
+        "SELECT * FROM match_players WHERE parser_version < ? AND match_id > 272400210",
         (aoe_replay_stats.PARSER_VERSION,))
     if len(match_players) == 0:
         return None

@@ -4,6 +4,7 @@ import requests
 import sqlite3
 import time
 import re
+import math
 from datetime import datetime;
 
 from dotenv import load_dotenv
@@ -106,12 +107,19 @@ def send_matches_to_server():
   NUM_TO_UPLOAD = 500
   print(f'Matches to upload: {len(matches)}')
   list_of_slices = zip(*(iter(matches),) * NUM_TO_UPLOAD)
-  number_of_slices = len(matches) / NUM_TO_UPLOAD
+  number_of_slices = math.ceil(len(matches) / NUM_TO_UPLOAD)
+  match_id_set = set()
   count = 0
   for match_set in list_of_slices:
     print(f'Sending set number {count} / {number_of_slices}')
     post_dict = {'matches':[], 'match_player_actions':[], 'players':set(), 'patches':set()}
     for match in match_set:
+      #somehow im getting duplicate matches??? shouldnt be possible but i dunno, INVESTIGATE
+      if match[0] in match_id_set:
+        print(f"Duplicate Match id: {match[0]}")
+        continue
+      match_id_set.add(match[0])
+
       #update bad values of patch
       #from those match ids get the corresponding match player actions for player1
       post_dict['matches'].append(match_to_dict(match))
@@ -132,6 +140,10 @@ def send_matches_to_server():
     end = time.time()
     print(f'Building request took {end - start} seconds.')
     r = requests.post(POST_ENDPOINT, json=post_dict, headers={'Authorization': 'Api-Key '+API_KEY})
+    if r.status_code != 201:
+      print (f"Failed with returned status code: {r.status_code}")
+      exit()
+
     end = time.time()
     print(f'Full loop toop {end - start} seconds.')
     print(f'Sent set number {count} / {number_of_slices}')
